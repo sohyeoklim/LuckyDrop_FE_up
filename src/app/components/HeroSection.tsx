@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Slider from 'react-slick';
 import { Heart, Clock, Ticket } from 'lucide-react';
 
@@ -91,16 +92,16 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
 
           {/* 응모 버튼 */}
           <div className="flex items-center gap-4">
-            <button
-              disabled={userTickets < draw.ticketCost}
-              className={`flex-1 px-8 py-4 rounded-xl font-bold text-white text-lg shadow-lg transition-all hover:scale-105 ${
+            <Link
+              to={`/draw/${draw.id}`}
+              className={`flex-1 px-8 py-4 rounded-xl font-bold text-white text-lg shadow-lg transition-all hover:scale-105 text-center ${
                 userTickets < draw.ticketCost
-                  ? 'bg-gray-400 cursor-not-allowed'
+                  ? 'bg-gray-400 cursor-not-allowed pointer-events-none'
                   : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:shadow-xl'
               }`}
             >
               지금 응모하기
-            </button>
+            </Link>
             <div className="text-sm text-gray-600">
               보유 티켓: <span className="font-bold text-purple-600">{userTickets}장</span>
             </div>
