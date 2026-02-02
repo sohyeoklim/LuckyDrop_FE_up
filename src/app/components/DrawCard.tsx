@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Heart, Clock, Users, Ticket } from 'lucide-react';
 
 interface DrawCardProps {
@@ -16,8 +17,17 @@ interface DrawCardProps {
 export function DrawCard({ draw }: DrawCardProps) {
   const [liked, setLiked] = useState(draw.liked);
 
+  const handleLike = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setLiked(!liked);
+  };
+
   return (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1 group">
+    <Link 
+      to={`/draw/${draw.id}`}
+      className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1 group block"
+    >
       {/* 이미지 */}
       <div className="relative">
         <div className="aspect-[4/3] bg-gradient-to-br from-purple-100 to-pink-100 overflow-hidden">
@@ -30,7 +40,7 @@ export function DrawCard({ draw }: DrawCardProps) {
         
         {/* 찜 버튼 */}
         <button
-          onClick={() => setLiked(!liked)}
+          onClick={handleLike}
           className="absolute top-3 right-3 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:scale-110 transition-transform"
         >
           <Heart
@@ -64,10 +74,10 @@ export function DrawCard({ draw }: DrawCardProps) {
           </div>
         </div>
 
-        <button className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg hover:shadow-lg transition-shadow">
+        <div className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg text-center">
           응모하기
-        </button>
+        </div>
       </div>
-    </div>
+    </Link>
   );
 }
