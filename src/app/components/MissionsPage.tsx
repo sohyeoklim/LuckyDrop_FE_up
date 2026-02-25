@@ -10,6 +10,7 @@ import {
   Clock,
   Flame,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface Mission {
   id: number;
@@ -139,7 +140,7 @@ export function MissionsPage() {
     if (!mission || mission.completed) return;
 
     // 실제로는 서버에 보상 요청
-    alert(`${mission.reward} 티켓을 받았습니다!`);
+    toast.success(`${mission.reward} 티켓을 받았습니다!`);
 
     setMissions((prev) =>
       prev.map((m) => (m.id === missionId ? { ...m, completed: true } : m))
@@ -148,7 +149,7 @@ export function MissionsPage() {
 
   const handleWatchAd = (missionId: number) => {
     // 실제로는 광고 SDK 실행
-    alert('광고를 시청 중입니다... (데모)');
+    toast('광고를 시청 중입니다... (데모)');
     setTimeout(() => {
       handleClaimReward(missionId);
     }, 2000);
@@ -368,7 +369,7 @@ export function MissionsPage() {
               <button
                 onClick={() => {
                   navigator.clipboard.writeText('LUCKY2026XYZ');
-                  alert('초대 코드가 복사되었습니다!');
+                  toast.success('초대 코드가 복사되었습니다!');
                 }}
                 className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
               >

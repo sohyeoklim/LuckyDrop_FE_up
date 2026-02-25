@@ -75,4 +75,16 @@ apiClient.interceptors.response.use(
   }
 );
 
+// 티켓 잔액 조회
+export const getTicketWallet = async (userId: string) => {
+  const response = await apiClient.get(`/api/ticket/wallet/${userId}`);
+  return response.data;
+};
+
+// 티켓 거래내역 조회
+export const getTicketLedger = async (userId: string) => {
+  const response = await apiClient.get(`/api/ticket/ledger/${userId}`);
+  return response.data;
+};
+
 export default apiClient;

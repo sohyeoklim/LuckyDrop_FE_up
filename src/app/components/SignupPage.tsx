@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Ticket, CheckCircle, Smartphone, Smile, Home } from 'lucide-react';
 import apiClient from '../../api/client';
+import toast from 'react-hot-toast';
 
 declare global {
   interface Window {
@@ -22,6 +23,15 @@ export function SignupPage() {
   const [address, setAddress] = useState('');
   const [addressDetail, setAddressDetail] = useState('');
   
+  // 이메일 인증 상태 - 3분 타이머
+  const [authCode, setAuthCode] = useState('');
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+  const [showAuthCodeInput, setShowAuthCodeInput] = useState(false);
+  const [countdown, setCountdown] = useState(180); // 3분
+  const countdownIntervalRef = useRef<NodeJS.Timeout>();
+
   const [agreements, setAgreements] = useState({
     terms: false,
     privacy: false,
@@ -41,14 +51,69 @@ export function SignupPage() {
       marketing: checked,
     });
   };
-  
+
   const allRequiredAgreed = agreements.terms && agreements.privacy;
 
   const handleNextStep = () => {
     if (allRequiredAgreed) {
       setStep(2);
     } else {
-      alert('필수 약관에 동의해주세요.');
+      toast.error('필수 약관에 동의해주세요.');
+    }
+  };
+
+  // 인증번호 발송
+  const handleSendAuthCode = async () => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('올바른 이메일을 입력해주세요.');
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      await apiClient.post('/api/signup/email', { email });
+      toast.success('인증번호가 발송되었습니다!');
+      setShowAuthCodeInput(true);
+      setAuthCode('');
+      setCountdown(180); // 3분
+      
+      const interval = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      countdownIntervalRef.current = interval;
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || '발송 실패');
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  // 인증번호 확인 (authNum 사용)
+  const handleVerifyAuthCode = async () => {
+    if (!authCode.trim()) {
+      toast.error('인증번호를 입력해주세요.');
+      return;
+    }
+
+    setIsVerifyingCode(true);
+    try {
+      await apiClient.post('/api/signup/emailAuth', { 
+        email, 
+        authNum: authCode.trim()
+      });
+      setIsEmailVerified(true);
+      setShowAuthCodeInput(false);
+      toast.success('인증이 완료되었습니다!');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || '인증 실패');
+    } finally {
+      setIsVerifyingCode(false);
     }
   };
 
@@ -65,30 +130,33 @@ export function SignupPage() {
     e.preventDefault();
     
     if (password !== confirmPassword) {
-      alert('비밀번호가 일치하지 않습니다.');
+      toast.error('비밀번호가 일치하지 않습니다.');
       return;
     }
-    
+    if (!isEmailVerified) {
+      toast.error('이메일 인증을 완료해주세요.');
+      return;
+    }
+
     const payload = {
-      name,
-      nickname,
-      phone: phoneNumber,
-      email,
-      password,
-      address: `${postcode} ${address} ${addressDetail}`.trim(), // 하나의 문자열
-      //agreements,
+      name, nickname, phone: phoneNumber, email, password,
+      address: `${postcode} ${address} ${addressDetail}`.trim(),
     };
 
     try {
-      await apiClient.post('/api/member/create', payload);
-      alert('회원가입이 완료되었습니다! 로그인 페이지로 이동합니다.');
+      await apiClient.post('/api/user/create', payload);
+      toast.success('회원가입이 완료되었습니다!');
       navigate('/login');
     } catch (error: any) {
-      console.error('Signup failed:', error);
-      const errorMessage = error.response?.data?.message || '회원가입 중 오류가 발생했습니다.';
-      alert(errorMessage);
+      toast.error(error.response?.data?.message || '회원가입 실패');
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-8">
@@ -111,21 +179,21 @@ export function SignupPage() {
           <h2 className="text-2xl font-bold text-gray-900 mb-6">회원가입</h2>
 
           {/* 스텝 인디케이터 */}
-          <div className="flex justify-center items-center mb-6">
+          <div className="flex items-center justify-center mb-8">
             <div className={`flex items-center ${step === 1 ? 'text-purple-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${step === 1 ? 'border-purple-600' : 'border-gray-400'}`}>1</div>
-              <span className="ml-2 font-medium">약관동의</span>
+              <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${step === 1 ? 'border-purple-600 bg-purple-50' : 'border-gray-400 bg-gray-100'}`}>1</div>
+              <span className="ml-2 font-medium">약관</span>
             </div>
             <div className="w-12 h-px bg-gray-300 mx-4"></div>
             <div className={`flex items-center ${step === 2 ? 'text-purple-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${step === 2 ? 'border-purple-600' : 'border-gray-400'}`}>2</div>
+              <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${step === 2 ? 'border-purple-600 bg-purple-50' : 'border-gray-400 bg-gray-100'}`}>2</div>
               <span className="ml-2 font-medium">정보입력</span>
             </div>
           </div>
 
           {step === 1 && (
-            <div className="space-y-4">
-              <div className="border border-gray-200 rounded-lg p-4">
+            <div className="space-y-4 mb-8">
+              <div className="border border-gray-200 rounded-xl p-4 mb-4">
                 <label className="flex items-center">
                   <input
                     type="checkbox"
@@ -136,51 +204,32 @@ export function SignupPage() {
                   <span className="ml-3 font-semibold text-gray-800">전체 동의</span>
                 </label>
               </div>
+              
               <div className="space-y-3 pl-2">
                 <label className="flex items-start">
-                  <input
-                    type="checkbox"
-                    name="terms"
-                    checked={agreements.terms}
-                    onChange={handleAgreementChange}
-                    className="w-4 h-4 mt-1 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                  />
+                  <input type="checkbox" name="terms" checked={agreements.terms} onChange={handleAgreementChange} className="w-4 h-4 mt-1 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
                   <span className="ml-3 text-sm text-gray-600">
-                    <a href="#" className="text-purple-600 hover:text-purple-700 font-medium">[필수] 이용약관</a>
-                    에 동의합니다.
+                    <a href="#" className="text-purple-600 hover:text-purple-700 font-medium">[필수] 이용약관</a> 동의
                   </span>
                 </label>
                 <label className="flex items-start">
-                  <input
-                    type="checkbox"
-                    name="privacy"
-                    checked={agreements.privacy}
-                    onChange={handleAgreementChange}
-                    className="w-4 h-4 mt-1 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                  />
+                  <input type="checkbox" name="privacy" checked={agreements.privacy} onChange={handleAgreementChange} className="w-4 h-4 mt-1 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
                   <span className="ml-3 text-sm text-gray-600">
-                    <a href="#" className="text-purple-600 hover:text-purple-700 font-medium">[필수] 개인정보처리방침</a>
-                    에 동의합니다.
+                    <a href="#" className="text-purple-600 hover:text-purple-700 font-medium">[필수] 개인정보처리방침</a> 동의
                   </span>
                 </label>
                 <label className="flex items-start">
-                  <input
-                    type="checkbox"
-                    name="marketing"
-                    checked={agreements.marketing}
-                    onChange={handleAgreementChange}
-                    className="w-4 h-4 mt-1 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                  />
+                  <input type="checkbox" name="marketing" checked={agreements.marketing} onChange={handleAgreementChange} className="w-4 h-4 mt-1 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
                   <span className="ml-3 text-sm text-gray-600">
-                    <a href="#" className="text-purple-600 hover:text-purple-700 font-medium">[선택] 마케팅 정보 수신</a>
-                    에 동의합니다.
+                    <a href="#" className="text-purple-600 hover:text-purple-700 font-medium">[선택] 마케팅</a> 동의
                   </span>
                 </label>
               </div>
+              
               <button
                 onClick={handleNextStep}
                 disabled={!allRequiredAgreed}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-4 rounded-xl font-medium hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-4 rounded-xl font-medium hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:from-gray-400 disabled:to-gray-500"
               >
                 다음
               </button>
@@ -193,63 +242,222 @@ export function SignupPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">이름</label>
                 <div className="relative">
-                  <User className="absolute h-5 w-5 text-gray-400 left-3 top-1/2 -translate-y-1/2" />
-                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="홍길동" required className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <User className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="홍길동"
+                    required
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
                 </div>
               </div>
+
               {/* 닉네임 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">닉네임</label>
                 <div className="relative">
-                  <Smile className="absolute h-5 w-5 text-gray-400 left-3 top-1/2 -translate-y-1/2" />
-                  <input type="text" value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="사용하실 닉네임을 입력하세요" required className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Smile className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    placeholder="닉네임"
+                    required
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
                 </div>
               </div>
-              {/* 핸드폰번호 */}
+
+              {/* 핸드폰 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">핸드폰번호</label>
                 <div className="relative">
-                  <Smartphone className="absolute h-5 w-5 text-gray-400 left-3 top-1/2 -translate-y-1/2" />
-                  <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="010-1234-5678" required className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Smartphone className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="010-1234-5678"
+                    required
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
                 </div>
               </div>
+
+              {/* 이메일 - 모든 버튼 퍼플-핑크 통일 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  이메일 <span className="text-red-500">*</span>
+                </label>
+                {isEmailVerified ? (
+                  <div className="flex items-center justify-between p-3 bg-green-50 border-2 border-green-200 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                      <span className="font-medium text-green-800">{email}</span>
+                    </div>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">인증완료</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex gap-2 mb-2">
+                      <div className="flex-1 relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Mail className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="your@email.com"
+                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                      </div>
+                      {/* ✅ 퍼플-핑크로 통일 */}
+                      <button
+                        type="button"
+                        onClick={handleSendAuthCode}
+                        disabled={isSendingEmail || !email}
+                        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-1"
+                      >
+                        {isSendingEmail ? (
+                          <>
+                            <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin" />
+                            발송중
+                          </>
+                        ) : (
+                          '인증번호'
+                        )}
+                      </button>
+                    </div>
+                    
+                    {showAuthCodeInput && (
+                      <div className="p-3 bg-gray-50 border rounded-xl">
+                        <div className="flex gap-2">
+                          <div className="flex-1 relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <Ticket className="h-5 w-5 text-gray-400" />
+                            </div>
+                            <input
+                              type="text"
+                              value={authCode}
+                              onChange={(e) => setAuthCode(e.target.value)}
+                              placeholder="000000"
+                              maxLength={6}
+                              className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                            />
+                            {countdown > 0 && (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+                                {Math.floor(countdown/60)}:{(countdown%60).toString().padStart(2, '0')}
+                              </div>
+                            )}
+                          </div>
+                          {/* ✅ 퍼플-핑크로 통일 */}
+                          <button
+                            type="button"
+                            onClick={handleVerifyAuthCode}
+                            disabled={isVerifyingCode || !authCode}
+                            className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-1"
+                          >
+                            {isVerifyingCode ? (
+                              <>
+                                <div className="w-3.5 h-3.5 border border-white border-t-transparent rounded-full animate-spin" />
+                                확인중
+                              </>
+                            ) : (
+                              '인증'
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">3분 이내 입력해주세요</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
               {/* 주소 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">주소 (선택)</label>
-                <div className="flex gap-2 mb-2">
-                  <input type="text" value={postcode} placeholder="우편번호" readOnly className="block w-1/3 px-3 py-3 border border-gray-300 rounded-xl bg-gray-50 focus:outline-none"/>
-                  <button type="button" onClick={handleAddressSearch} className="w-2/3 bg-gray-200 text-gray-800 py-3 px-4 rounded-xl font-medium hover:bg-gray-300 transition-all duration-200">주소 검색</button>
-                </div>
-                <div className="relative">
-                  <Home className="absolute h-5 w-5 text-gray-400 left-3 top-1/2 -translate-y-1/2" />
-                  <input type="text" value={address} placeholder="주소" readOnly className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl bg-gray-50 focus:outline-none"/>
-                </div>
-                <div className="relative mt-2">
-                  <input type="text" value={addressDetail} onChange={(e) => setAddressDetail(e.target.value)} placeholder="상세주소를 입력하세요" className="block w-full px-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"/>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={postcode}
+                      placeholder="우편번호"
+                      readOnly
+                      className="flex-1 block px-3 py-3 border border-gray-300 rounded-xl bg-gray-50"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddressSearch}
+                      className="px-4 py-3 bg-gray-200 text-gray-800 font-medium rounded-xl hover:bg-gray-300 transition-all duration-200 whitespace-nowrap"
+                    >
+                      검색
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Home className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      value={address}
+                      placeholder="기본주소"
+                      readOnly
+                      className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl bg-gray-50"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={addressDetail}
+                    onChange={(e) => setAddressDetail(e.target.value)}
+                    placeholder="상세주소"
+                    className="block w-full px-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
                 </div>
               </div>
-              {/* 이메일 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">이메일</label>
-                <div className="relative">
-                  <Mail className="absolute h-5 w-5 text-gray-400 left-3 top-1/2 -translate-y-1/2" />
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" required className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" />
-                </div>
-              </div>
+
               {/* 비밀번호 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">비밀번호</label>
                 <div className="relative">
-                  <Lock className="absolute h-5 w-5 text-gray-400 left-3 top-1/2 -translate-y-1/2" />
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8자 이상 입력해주세요" required minLength={8} className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
                 </div>
               </div>
+
               {/* 비밀번호 확인 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">비밀번호 확인</label>
                 <div className="relative">
-                  <Lock className="absolute h-5 w-5 text-gray-400 left-3 top-1/2 -translate-y-1/2" />
-                  <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="비밀번호를 다시 입력해주세요" required minLength={8} className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
                 </div>
               </div>
 
@@ -257,13 +465,14 @@ export function SignupPage() {
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="w-full bg-gray-200 text-gray-800 py-3 px-4 rounded-xl font-medium hover:bg-gray-300 transition-all duration-200"
+                  className="flex-1 bg-gray-200 text-gray-800 py-3 px-4 rounded-xl font-medium hover:bg-gray-300 transition-all duration-200"
                 >
                   이전
                 </button>
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-4 rounded-xl font-medium hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  disabled={!isEmailVerified}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-4 rounded-xl font-medium hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:from-gray-400 disabled:to-gray-500"
                 >
                   회원가입
                 </button>
@@ -272,13 +481,26 @@ export function SignupPage() {
           )}
 
           {/* 로그인 링크 */}
-          <div className="mt-6 text-center pt-6 border-t border-gray-200">
+          <div className="mt-6 pt-6 border-t border-gray-200 text-center">
             <p className="text-gray-600">
               이미 계정이 있으신가요?{' '}
               <Link to="/login" className="text-purple-600 hover:text-purple-700 font-medium">
                 로그인
               </Link>
             </p>
+          </div>
+
+          {/* 혜택 안내 */}
+          <div className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl">
+            <div className="flex items-start gap-3">
+              <Ticket className="w-6 h-6 text-purple-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-gray-900">회원가입 특전</p>
+                <p className="text-sm text-gray-600">
+                  지금 가입하시면 <strong>무료 티켓 10개</strong>를 즉시 지급받습니다!
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

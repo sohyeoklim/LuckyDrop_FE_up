@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, Ticket, Heart, Users, AlertCircle } from 'lucide-react';
 import Slider from 'react-slick';
+import toast from 'react-hot-toast';
 
 // 드로우 상태 타입
 type DrawStatus = 'OPEN' | 'LOCKED' | 'DRAWING' | 'DONE' | 'CANCEL';
@@ -111,18 +112,18 @@ export function DrawDetailPage() {
 
   const handleEntry = () => {
     if (draw.status !== 'OPEN') {
-      alert('현재 응모할 수 없는 드로우입니다.');
+      toast.error('현재 응모할 수 없는 드로우입니다.');
       return;
     }
 
     const totalCost = draw.ticketCost * entryCount;
     if (userTickets < totalCost) {
-      alert('티켓이 부족합니다.');
+      toast.error('티켓이 부족합니다.');
       return;
     }
 
     // 실제로는 서버에 응모 요청
-    alert(`${entryCount}회 응모 완료! (${totalCost} 티켓 사용)`);
+    toast.success(`${entryCount}회 응모 완료! (${totalCost} 티켓 사용)`);
     navigate('/my/entries');
   };
 
