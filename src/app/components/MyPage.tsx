@@ -1,6 +1,7 @@
 import { Link, useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, Ticket, Heart, ListChecks, History, Award, TrendingUp, LogOut } from 'lucide-react';
+import { ArrowLeft, Ticket, Heart, ListChecks, History, Award, TrendingUp, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+
 
 // Mock data - will be replaced by API calls in a real app
 const stats = {
@@ -15,35 +16,40 @@ const recentEntries = [
   { id: 3, drawTitle: 'AirPods Pro', image: 'https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=400', entryDate: '2026-01-15', ticketUsed: 2, status: 'DONE' },
 ];
 const likedDraws = [
-    { id: 1, title: 'Sony WH-1000XM5', image: 'https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=400', timeLeft: '18:15:30', ticketCost: 2 },
-    { id: 2, title: 'PlayStation 5', image: 'https://images.unsplash.com/photo-1604846887565-640d2f52d564?w=400', timeLeft: '08:20:45', ticketCost: 8 },
+  { id: 1, title: 'Sony WH-1000XM5', image: 'https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=400', timeLeft: '18:15:30', ticketCost: 2 },
+  { id: 2, title: 'PlayStation 5', image: 'https://images.unsplash.com/photo-1604846887565-640d2f52d564?w=400', timeLeft: '08:20:45', ticketCost: 8 },
 ];
 const ticketHistory = [
-    { id: 1, type: '지급', amount: 10, reason: '회원가입 보너스', date: '2026-01-19' },
-    { id: 2, type: '사용', amount: -5, reason: 'Apple Watch 응모', date: '2026-01-19' },
-    { id: 3, type: '지급', amount: 5, reason: '출석 체크', date: '2026-01-18' },
-    { id: 4, type: '사용', amount: -3, reason: 'iPhone 15 응모', date: '2026-01-18' },
+  { id: 1, type: '지급', amount: 10, reason: '회원가입 보너스', date: '2026-01-19' },
+  { id: 2, type: '사용', amount: -5, reason: 'Apple Watch 응모', date: '2026-01-19' },
+  { id: 3, type: '지급', amount: 5, reason: '출석 체크', date: '2026-01-18' },
+  { id: 4, type: '사용', amount: -3, reason: 'iPhone 15 응모', date: '2026-01-18' },
 ];
+
 
 export function MyPage() {
   const navigate = useNavigate();
   const { user, logout, isLoading } = useAuth();
+
 
   // While the auth state is loading, show a blank or loading screen
   if (isLoading) {
     return <div className="min-h-screen bg-gray-50"></div>;
   }
 
+
   // If not logged in, redirect to the login page
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+
 
   const handleLogout = () => {
     logout();
     // After logout, the user state becomes null, and this component will
     // re-render, triggering the !user check above to navigate to /login.
   };
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -59,10 +65,18 @@ export function MyPage() {
               <span className="font-medium">돌아가기</span>
             </button>
             <h1 className="text-xl font-bold text-gray-900">마이페이지</h1>
-            <div className="w-20"></div>
+            <Link
+              to="/my/edit"
+              replace
+              className="flex items-center gap-2 text-purple-600 hover:text-purple-700 transition-colors"
+            >
+              <Settings className="w-5 h-5" />
+              <span className="font-medium">정보수정</span>
+            </Link>
           </div>
         </div>
       </header>
+
 
       {/* 메인 콘텐츠 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -72,12 +86,14 @@ export function MyPage() {
             <div>
               <h2 className="text-2xl font-bold mb-2">{user.nickname}</h2>
               <p className="text-purple-100">{user.email}</p>
+              {user.phone && <p className="text-purple-100 text-sm mt-1">{user.phone}</p>}
+              {user.address && <p className="text-purple-100 text-sm mt-1">{user.address}</p>}
             </div>
             <div className="flex items-center gap-4">
               <div className="text-center bg-white/20 backdrop-blur-sm rounded-xl p-4">
                 <Ticket className="w-8 h-8 mx-auto mb-2" />
                 <p className="text-sm opacity-90">보유 티켓</p>
-                <p className="text-3xl font-bold">120</p> {/* TODO: Replace with dynamic data */}
+                <p className="text-3xl font-bold">120</p>
               </div>
               <button 
                 onClick={handleLogout}
@@ -88,6 +104,7 @@ export function MyPage() {
               </button>
             </div>
           </div>
+
 
           {/* 통계 요약 */}
           <div className="grid grid-cols-4 gap-4">
@@ -113,6 +130,7 @@ export function MyPage() {
             </div>
           </div>
         </div>
+
 
         {/* 콘텐츠 섹션 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -169,6 +187,7 @@ export function MyPage() {
             </div>
           </section>
 
+
           {/* 찜한 드로우 */}
           <section>
             <div className="flex items-center justify-between mb-4">
@@ -216,6 +235,7 @@ export function MyPage() {
             </div>
           </section>
         </div>
+
 
         {/* 티켓 내역 */}
         <section className="mt-8">
@@ -269,6 +289,7 @@ export function MyPage() {
             )}
           </div>
         </section>
+
 
         {/* 퀵 액션 버튼 */}
         <div className="mt-8 grid grid-cols-2 gap-4">

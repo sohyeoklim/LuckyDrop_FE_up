@@ -1,4 +1,4 @@
-import { Ticket, Heart, User, Menu, LogOut } from 'lucide-react';
+import { Ticket, Heart, User, Menu, LogOut, PlusCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -31,6 +31,12 @@ export function TopAppBar({ tickets }: TopAppBarProps) {
             <Link to="/missions" className="text-gray-700 hover:text-purple-600 transition-colors font-medium">
               미션
             </Link>
+            {user && user.role === 'HOST' && (
+              <Link to="/draws/create" className="flex items-center gap-2 text-gray-700 hover:text-purple-600 transition-colors font-medium">
+                <PlusCircle className="w-5 h-5" />
+                <span>드로우 생성</span>
+              </Link>
+            )}
           </nav>
 
           {/* 우측 메뉴 */}

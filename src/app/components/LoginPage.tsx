@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { Mail, Lock, Ticket } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 export function LoginPage() {
   const { login, user, isLoading } = useAuth();
@@ -17,7 +18,7 @@ export function LoginPage() {
     } catch (error: any) {
       console.error('Login failed:', error);
       const errorMessage = error.response?.data?.message || '이메일 또는 비밀번호가 올바르지 않습니다.';
-      alert(errorMessage);
+      toast.error(errorMessage);
     }
   };
 
@@ -108,9 +109,9 @@ export function LoginPage() {
                 />
                 <span className="ml-2 text-gray-600">로그인 유지</span>
               </label>
-              <a href="#" className="text-purple-600 hover:text-purple-700 font-medium">
+              <Link to="/forgot-password" className="text-purple-600 hover:text-purple-700 font-medium text-sm">
                 비밀번호 찾기
-              </a>
+              </Link>
             </div>
 
             <div className="pt-4 border-t border-gray-200">
