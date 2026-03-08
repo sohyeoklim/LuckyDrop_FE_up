@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Ticket, CheckCircle, Smartphone, Smile, Home } from 'lucide-react';
-import apiClient from '../../api/client';
+import apiClient from '../api/client';
 import toast from 'react-hot-toast';
 
 declare global {

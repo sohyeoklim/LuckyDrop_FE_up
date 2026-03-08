@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, User as UserIcon, Phone, MapPin, Mail, IdCard, Shield, Edit2, Check, X, Home, Search } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import apiClient from '../../api/client';
+import apiClient from '../api/client';
 import toast from 'react-hot-toast';
 
 

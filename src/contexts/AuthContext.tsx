@@ -1,6 +1,6 @@
 // contexts/AuthContext.tsx
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import apiClient from '../../api/client';
+import apiClient from '../api/client';
 
 
 interface User {

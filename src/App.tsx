@@ -1,26 +1,24 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { MainPage } from '@/app/components/MainPage';
-import { LoginPage } from '@/app/components/LoginPage';
-import { SignupPage } from '@/app/components/SignupPage';
-import { ForgotPasswordPage } from '@/app/components/ForgotPasswordPage';
-import { DrawDetailPage } from '@/app/components/DrawDetailPage';
-import { MyPage } from '@/app/components/MyPage';
-import { EditProfile } from '@/app/components/EditProfile';
-import { MissionsPage } from '@/app/components/MissionsPage';
-import { MyEntriesPage } from '@/app/components/MyEntriesPage';
-import { MyLikedPage } from '@/app/components/MyLikedPage';
-import { MyTicketsPage } from '@/app/components/MyTicketsPage';
-import { DrawsListPage } from '@/app/components/DrawsListPage';
-import { CreateDrawPage } from '@/app/components/CreateDrawPage';
+import { MainPage } from '@/components/MainPage';
+import { LoginPage } from '@/components/LoginPage';
+import { SignupPage } from '@/components/SignupPage';
+import { ForgotPasswordPage } from '@/components/ForgotPasswordPage';
+import { DrawDetailPage } from '@/components/draw/DrawDetailPage';
+import { MyPage } from '@/components/MyPage';
+import { EditProfile } from '@/components/EditProfile';
+import { MissionsPage } from '@/components/MissionsPage';
+import { MyEntriesPage } from '@/components/MyEntriesPage';
+import { MyLikedPage } from '@/components/MyLikedPage';
+import { MyTicketsPage } from '@/components/MyTicketsPage';
+import { DrawsListPage } from '@/components/draw/DrawsListPage';
+import { CreateDrawPage } from '@/components/draw/CreateDrawPage';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
-import { AuthProvider } from './contexts/AuthContext';
 
 
 export default function App() {
   return (
-    <AuthProvider>
       <BrowserRouter>
         <Toaster 
           position="top-center"
@@ -61,6 +59,5 @@ export default function App() {
           <Route path="/missions" element={<MissionsPage />} />
         </Routes>
       </BrowserRouter>
-    </AuthProvider>
   );
 }
