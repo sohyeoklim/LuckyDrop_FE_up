@@ -13,22 +13,40 @@ const formatDiff = (diff: number) => {
   )}:${String(seconds).padStart(2, "0")}`;
 };
 
-export const getDrawStatusLabel = (status: DrawStatus) => {
+export function getDrawStatusStyle(status: DrawStatus) {
   switch (status) {
-    case "DRAFT":
-      return "응모 예정";
     case "ACTIVE":
-      return "응모 가능";
+      return {
+        label: "응모 가능",
+        className: "bg-green-100 text-green-800",
+      };
+    case "DRAFT":
+      return {
+        label: "응모 예정",
+        className: "bg-blue-100 text-blue-800",
+      };
     case "DRAWING":
-      return "추첨 중";
+      return {
+        label: "추첨 중",
+        className: "bg-yellow-100 text-yellow-800",
+      };
     case "CLOSE":
-      return "응모 종료";
+      return {
+        label: "응모 마감",
+        className: "bg-gray-100 text-gray-800",
+      };
     case "CANCEL":
-      return "취소됨";
+      return {
+        label: "취소됨",
+        className: "bg-red-100 text-red-800",
+      };
     default:
-      return "";
+      return {
+        label: "",
+        className: "",
+      };
   }
-};
+}
 
 export const getDrawTimeText = (
   status: DrawStatus,

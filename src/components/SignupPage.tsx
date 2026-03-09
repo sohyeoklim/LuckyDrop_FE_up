@@ -30,7 +30,7 @@ export function SignupPage() {
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [showAuthCodeInput, setShowAuthCodeInput] = useState(false);
   const [countdown, setCountdown] = useState(180); // 3분
-  const countdownIntervalRef = useRef<NodeJS.Timeout>();
+ const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const [agreements, setAgreements] = useState({
     terms: false,

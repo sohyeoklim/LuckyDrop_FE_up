@@ -79,6 +79,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const response = await apiClient.post('/api/user/login', { email, password });
       const { authenticated, user: userInfo } = response.data;
 
+      console.log("login response headers =", response.headers);
+    console.log("login response data =", response.data);
 
       if (!authenticated) {
         throw new Error('로그인 실패');

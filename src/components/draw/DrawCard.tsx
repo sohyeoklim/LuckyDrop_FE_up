@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Heart, Clock, Users, Ticket } from "lucide-react";
 import type { DrawCardResponse } from "../../types/draw";
-import { getDrawTimeText, getDrawStatusLabel } from "../../utils/draw";
+import { getDrawTimeText, getDrawStatusStyle } from "../../utils/draw";
 
 interface DrawCardProps {
   draw: DrawCardResponse;
@@ -18,7 +18,8 @@ export function DrawCard({ draw }: DrawCardProps) {
   };
 
   const timeText = getDrawTimeText(draw.status, draw.startAt, draw.endAt);
-  const statusLabel = getDrawStatusLabel(draw.status);
+  const statusLabel = getDrawStatusStyle(draw.status);
+  const { label, className } = getDrawStatusStyle(draw.status);
 
   return (
     <Link
@@ -50,9 +51,10 @@ export function DrawCard({ draw }: DrawCardProps) {
           />
         </button>
 
+
         <div className="absolute bottom-4 left-4">
-          <span className="px-4 py-2 rounded-full text-sm font-medium bg-green-100 text-green-800">
-            {statusLabel}
+          <span className={`px-4 py-2 rounded-full text-sm font-medium ${className}`}>
+            {label}
           </span>
         </div>
       </div>
