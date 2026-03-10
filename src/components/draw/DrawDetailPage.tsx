@@ -194,9 +194,15 @@ export function DrawDetailPage() {
               {draw.images.map((image, index) => (
                 <div key={index} className="aspect-square">
                   <img
-                    src={image}
+                    src={image || "/placeholder.png"}
                     alt={`${draw.productName} ${index + 1}`}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (!target.src.includes("/placeholder.png")) { 
+                        target.src = "/placeholder.png";
+                      }
+                    }}
                   />
                 </div>
               ))}

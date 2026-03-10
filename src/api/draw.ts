@@ -4,6 +4,18 @@ import type { DrawCardResponse, PageResponse, DrawDetailResponse } from "@/types
 export type DrawTab = "ALL" | "UPCOMING" | "ONGOING" | "CLOSED";
 export type DrawSort = "LATEST" | "BOOKMARK";
 
+export interface HotBannerResponse {
+  drawId: number;
+  reason: string;
+  title: string;
+  productName: string;
+  images: string[];
+  isBookmarked: boolean;
+  ticketCostEntry: number;
+  endAt: string;
+  startAt: string;
+}
+
 export interface GetDrawCardParams {
   tab?: DrawTab;
   sort?: DrawSort;
@@ -41,5 +53,11 @@ export async function entryDraw(
     }
   );
 
+  return response.data;
+}
+
+
+export async function getHotBanner(): Promise<HotBannerResponse> {
+  const response = await api.get<HotBannerResponse>("/api/draws/hot-banner");
   return response.data;
 }
