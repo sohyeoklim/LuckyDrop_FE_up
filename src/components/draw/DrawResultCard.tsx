@@ -1,14 +1,16 @@
 import { Trophy, X, Calendar } from 'lucide-react';
 
-interface DrawResultCardProps {
-  result: {
+export interface DrawResultItem {
     id: number;
     title: string;
     status: '당첨' | '미당첨';
     message: string;
     date: string;
     image: string;
-  };
+}
+
+export interface DrawResultCardProps {
+  result: DrawResultItem;
 }
 
 export function DrawResultCard({ result }: DrawResultCardProps) {

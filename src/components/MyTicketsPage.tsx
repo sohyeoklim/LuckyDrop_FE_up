@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, TrendingUp, TrendingDown, Filter, Calendar, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getTicketWallet, getTicketLedger } from '../../api/client';
+import { getTicketWallet, getTicketLedger } from '../api/client';
 import { format } from 'date-fns';
 
 type TicketType = '지급' | '사용' | '환불' | '충전';

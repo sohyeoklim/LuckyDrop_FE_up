@@ -1,21 +1,25 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Upload, X, Calendar, Ticket, Users, Package, DollarSign, Tag, Truck } from "lucide-react";
 import { useState, useRef, ChangeEvent } from "react";
+import axios from "axios";
+import type { DrawCreateRequest } from "../../types/draw";
+
+function toLocalDateTimeString(value: string) {
+  if (!value) return "";
+  return value.length === 16 ? `${value}:00` : value;
+}
 
 export function CreateDrawPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // State for form data
   const [formData, setFormData] = useState({
-    // Draw fields
     title: "",
     description: "",
     winnerCount: "",
     ticketCostEntry: "",
     startAt: "",
     endAt: "",
-    // Product fields
     productName: "",
     brand: "",
     productDescription: "",
@@ -25,6 +29,7 @@ export function CreateDrawPage() {
 
   const [imagePreview, setImagePreview] = useState<string>("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -51,12 +56,49 @@ export function CreateDrawPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: API 호출 로직
-    console.log("Form data:", formData);
-    console.log("Image file:", imageFile);
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  try {
+    const token = localStorage.getItem("accessToken");
+    console.log("token =", token);
+
+    const requestBody = {
+      title: formData.title,
+      description: formData.description,
+      ticketCostEntry: Number(formData.ticketCostEntry),
+      winnerCount: Number(formData.winnerCount),
+      startAt: formData.startAt + ":00",
+      endAt: formData.endAt + ":00",
+      product: {
+        name: formData.productName,
+        brand: formData.brand,
+        description: formData.productDescription,
+        retailPrice: formData.retailPrice ? Number(formData.retailPrice) : 0,
+        shippable: formData.shippable,
+        images: [
+          {
+            imageUrl: "https://picsum.photos/800/600",
+            sortOrder: 0,
+          },
+        ],
+      },
+    };
+
+    await axios.post(
+      "http://localhost:8080/api/draws/create",
+      requestBody,
+      {
+        withCredentials: true,
+        }
+    );
+
+    alert("드로우 생성 완료");
+    navigate("/draws");
+  } catch (error) {
+    console.error("드로우 생성 실패:", error);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-50">

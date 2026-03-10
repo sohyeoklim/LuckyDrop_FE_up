@@ -1,6 +1,6 @@
 import { ArrowDownCircle, ArrowUpCircle, Calendar } from 'lucide-react';
 
-interface TicketHistoryItem {
+export interface TicketHistoryItem {
   id: number;
   type: '지급' | '사용';
   amount: number;
