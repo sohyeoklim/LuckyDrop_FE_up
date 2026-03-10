@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, Ticket, CheckCircle, Smartphone, Smile, Home } from 'lucide-react';
+import { Mail, Lock, User, Ticket, CheckCircle, Smartphone, Smile, Home, Users } from 'lucide-react';
 import apiClient from '../api/client';
 import toast from 'react-hot-toast';
 
@@ -22,6 +22,7 @@ export function SignupPage() {
   const [postcode, setPostcode] = useState('');
   const [address, setAddress] = useState('');
   const [addressDetail, setAddressDetail] = useState('');
+  const [referredByCode, setReferredByCode] = useState('');
   
   // 이메일 인증 상태 - 3분 타이머
   const [authCode, setAuthCode] = useState('');
@@ -30,7 +31,7 @@ export function SignupPage() {
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [showAuthCodeInput, setShowAuthCodeInput] = useState(false);
   const [countdown, setCountdown] = useState(180); // 3분
- const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const [agreements, setAgreements] = useState({
     terms: false,
@@ -86,7 +87,7 @@ export function SignupPage() {
           return prev - 1;
         });
       }, 1000);
-      countdownIntervalRef.current = interval;
+      intervalRef.current = interval;
     } catch (error: any) {
       toast.error(error.response?.data?.message || '발송 실패');
     } finally {
@@ -139,8 +140,13 @@ export function SignupPage() {
     }
 
     const payload = {
-      name, nickname, phone: phoneNumber, email, password,
+      name, 
+      nickname, 
+      phone: phoneNumber, 
+      email, 
+      password,
       address: `${postcode} ${address} ${addressDetail}`.trim(),
+      referredByCode: referredByCode.trim() || null,
     };
 
     try {
@@ -154,7 +160,7 @@ export function SignupPage() {
 
   useEffect(() => {
     return () => {
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
 
@@ -238,9 +244,9 @@ export function SignupPage() {
 
           {step === 2 && (
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* 이름 */}
+              {/* 1. 이름 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">이름</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">이름 <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <User className="h-5 w-5 text-gray-400" />
@@ -256,9 +262,9 @@ export function SignupPage() {
                 </div>
               </div>
 
-              {/* 닉네임 */}
+              {/* 2. 닉네임 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">닉네임</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">닉네임 <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Smile className="h-5 w-5 text-gray-400" />
@@ -274,25 +280,7 @@ export function SignupPage() {
                 </div>
               </div>
 
-              {/* 핸드폰 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">핸드폰번호</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Smartphone className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    placeholder="010-1234-5678"
-                    required
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              {/* 이메일 - 모든 버튼 퍼플-핑크 통일 */}
+              {/* 3. 이메일 (핸드폰보다 먼저 - 인증이 중요) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   이메일 <span className="text-red-500">*</span>
@@ -320,7 +308,6 @@ export function SignupPage() {
                           className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         />
                       </div>
-                      {/* ✅ 퍼플-핑크로 통일 */}
                       <button
                         type="button"
                         onClick={handleSendAuthCode}
@@ -359,7 +346,6 @@ export function SignupPage() {
                               </div>
                             )}
                           </div>
-                          {/* ✅ 퍼플-핑크로 통일 */}
                           <button
                             type="button"
                             onClick={handleVerifyAuthCode}
@@ -383,7 +369,61 @@ export function SignupPage() {
                 )}
               </div>
 
-              {/* 주소 */}
+              {/* 4. 핸드폰 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">핸드폰번호 <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Smartphone className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="010-1234-5678"
+                    required
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* 5. 비밀번호 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">비밀번호 <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* 6. 비밀번호 확인 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">비밀번호 확인 <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* 7. 주소 (선택) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">주소 (선택)</label>
                 <div className="space-y-2">
@@ -425,43 +465,29 @@ export function SignupPage() {
                 </div>
               </div>
 
-              {/* 비밀번호 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">비밀번호</label>
+              {/* 8. 추천인 코드 (맨 마지막 - 선택) */}
+              <div className="pt-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">추천인 코드 (선택)</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
+                    <Users className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    type="text"
+                    value={referredByCode}
+                    onChange={(e) => setReferredByCode(e.target.value.toUpperCase())}
+                    placeholder="AB12CD34 (친구에게 받은 코드)"
+                    maxLength={8}
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-purple-50"
                   />
                 </div>
+                <p className="text-xs text-purple-600 mt-1 font-medium flex items-center gap-1">
+                  <Ticket className="w-4 h-4" />
+                  입력 시 <strong>나 + 추천인 모두 5티켓 추가 지급!</strong>
+                </p>
               </div>
 
-              {/* 비밀번호 확인 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">비밀번호 확인</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-4 pt-6">
                 <button
                   type="button"
                   onClick={() => setStep(1)}
@@ -471,17 +497,17 @@ export function SignupPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!isEmailVerified}
+                  disabled={!isEmailVerified || !name || !nickname || !phoneNumber || !password || !confirmPassword}
                   className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-4 rounded-xl font-medium hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:from-gray-400 disabled:to-gray-500"
                 >
-                  회원가입
+                  회원가입 완료
                 </button>
               </div>
             </form>
           )}
 
           {/* 로그인 링크 */}
-          <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+          <div className="mt-8 pt-6 border-t border-gray-200 text-center">
             <p className="text-gray-600">
               이미 계정이 있으신가요?{' '}
               <Link to="/login" className="text-purple-600 hover:text-purple-700 font-medium">
@@ -491,13 +517,13 @@ export function SignupPage() {
           </div>
 
           {/* 혜택 안내 */}
-          <div className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl">
+          <div className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-100">
             <div className="flex items-start gap-3">
               <Ticket className="w-6 h-6 text-purple-600 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium text-gray-900">회원가입 특전</p>
-                <p className="text-sm text-gray-600">
-                  지금 가입하시면 <strong>무료 티켓 10개</strong>를 즉시 지급받습니다!
+                <p className="font-semibold text-gray-900">🎁 회원가입 즉시 지급</p>
+                <p className="text-sm text-gray-700 mt-1">
+                  <strong>기본 10티켓</strong> + <strong className="text-purple-600">추천인코드 입력시 5티켓 추가!</strong>
                 </p>
               </div>
             </div>
