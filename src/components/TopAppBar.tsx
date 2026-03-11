@@ -1,4 +1,4 @@
-import { Ticket, Heart, User, Menu, LogOut, PlusCircle } from 'lucide-react';
+import { Ticket, Heart, User, Menu, LogOut, ListChecks } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -23,45 +23,81 @@ export function TopAppBar({ tickets }: TopAppBarProps) {
             </h1>
           </Link>
 
-          {/* 네비게이션 */}
-          <nav className="hidden md:flex items-center gap-8">
-            <Link to="/draws" className="text-gray-700 hover:text-purple-600 transition-colors font-medium">
-              진행중인 드로우
-            </Link>
-            <Link to="/missions" className="text-gray-700 hover:text-purple-600 transition-colors font-medium">
-              미션
-            </Link>
-            {user && user.role === 'HOST' && (
-              <Link to="/draws/create" className="flex items-center gap-2 text-gray-700 hover:text-purple-600 transition-colors font-medium">
-                <PlusCircle className="w-5 h-5" />
-                <span>드로우 생성</span>
-              </Link>
-            )}
-          </nav>
-
           {/* 우측 메뉴 */}
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-3">
               {user ? (
                 <>
-                  <Link to="/my/tickets" className="flex items-center gap-2 bg-gradient-to-r from-purple-100 to-pink-100 px-4 py-2 rounded-full hover:from-purple-200 hover:to-pink-200 transition-colors">
+                  {/* 티켓 */}
+                  <Link
+                    to="/my/tickets"
+                    className="flex items-center gap-2 bg-gradient-to-r from-purple-100 to-pink-100 px-4 py-2 rounded-full hover:from-purple-200 hover:to-pink-200 transition-colors"
+                  >
                     <Ticket className="w-5 h-5 text-purple-600" />
                     <span className="font-bold text-purple-900">{tickets}</span>
                   </Link>
-                  <Link to="/my/liked" className="p-2 hover:bg-gray-100 rounded-full transition-colors" aria-label="찜한 목록">
-                    <Heart className="w-5 h-5 text-gray-600" />
-                  </Link>
-                  <Link to="/my" className="p-2 hover:bg-gray-100 rounded-full transition-colors" aria-label="마이페이지">
-                    <User className="w-5 h-5 text-gray-600" />
-                  </Link>
+
+                  {/* 미션 */}
+                  <div className="relative group">
+                    <Link
+                      to="/missions"
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors flex items-center justify-center"
+                      aria-label="미션"
+                    >
+                      <ListChecks className="w-5 h-5 text-gray-600 group-hover:text-purple-600 transition-colors" />
+                    </Link>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      미션
+                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45" />
+                    </div>
+                  </div>
+
+                  {/* 찜한 목록 */}
+                  <div className="relative group">
+                    <Link
+                      to="/my/liked"
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors flex items-center justify-center"
+                      aria-label="찜한 목록"
+                    >
+                      <Heart className="w-5 h-5 text-gray-600 group-hover:text-purple-600 transition-colors" />
+                    </Link>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      찜한 목록
+                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45" />
+                    </div>
+                  </div>
+
+                  {/* 마이페이지 */}
+                  <div className="relative group">
+                    <Link
+                      to="/my"
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors flex items-center justify-center"
+                      aria-label="마이페이지"
+                    >
+                      <User className="w-5 h-5 text-gray-600 group-hover:text-purple-600 transition-colors" />
+                    </Link>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      마이페이지
+                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45" />
+                    </div>
+                  </div>
+
                   <span className="text-sm text-gray-700">{user.nickname}님 환영합니다.</span>
-                  <button
-                    onClick={logout}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                    aria-label="로그아웃"
-                  >
-                    <LogOut className="w-5 h-5 text-gray-600" />
-                  </button>
+
+                  {/* 로그아웃 */}
+                  <div className="relative group">
+                    <button
+                      onClick={logout}
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors flex items-center justify-center"
+                      aria-label="로그아웃"
+                    >
+                      <LogOut className="w-5 h-5 text-gray-600 group-hover:text-red-500 transition-colors" />
+                    </button>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      로그아웃
+                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45" />
+                    </div>
+                  </div>
                 </>
               ) : (
                 <>

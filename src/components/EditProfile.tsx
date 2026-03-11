@@ -1,17 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, User as UserIcon, Phone, MapPin, Mail, IdCard, Shield, Edit2, Check, X, Home, Search } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, Phone, MapPin, Mail, IdCard, Shield, Edit2, Check, X, Home, Search, Users, Copy } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import apiClient from '../api/client';
 import toast from 'react-hot-toast';
-
 
 declare global {
   interface Window {
     daum: any;
   }
 }
-
 
 interface User {
   id: string;
@@ -21,8 +19,8 @@ interface User {
   phone?: string;
   address?: string;
   invitationCode?: string;
+  referredByCode?: string;
 }
-
 
 interface EditingState {
   nickname: boolean;
@@ -30,13 +28,11 @@ interface EditingState {
   address: boolean;
 }
 
-
 interface FormData {
   nickname: string;
   phone: string;
   address: string;
 }
-
 
 interface AddressData {
   postcode: string;
@@ -44,12 +40,10 @@ interface AddressData {
   addressDetail: string;
 }
 
-
 interface Errors {
   nickname?: string;
   phone?: string;
 }
-
 
 export function EditProfile() {
   const navigate = useNavigate();
@@ -60,7 +54,6 @@ export function EditProfile() {
     phone: '',
     address: '',
   });
-
 
   const [addressData, setAddressData] = useState<AddressData>({
     postcode: '',
@@ -77,12 +70,10 @@ export function EditProfile() {
   const [errors, setErrors] = useState<Errors>({});
   const [savingField, setSavingField] = useState<string | null>(null);
 
-
   useEffect(() => {
     // 페이지 진입 시 최신 사용자 정보를 가져옵니다.
     fetchUserDetails();
   }, []); // 마운트 시 한 번만 실행
-
 
   useEffect(() => {
     if (user) {
@@ -91,7 +82,6 @@ export function EditProfile() {
         phone: user.phone || '',
         address: user.address || '',
       });
-
 
       // 주소 파싱 (기존 주소를 우편번호, 주소, 상세주소로 분리)
       if (user.address) {
@@ -113,22 +103,18 @@ export function EditProfile() {
     }
   }, [user]);
 
-
   if (isLoading) {
     return <div className="min-h-screen bg-gray-50"></div>;
   }
-
 
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-
   const handleEdit = (field: keyof EditingState) => {
     setEditing(prev => ({ ...prev, [field]: true }));
     setErrors({});
   };
-
 
   const handleCancel = (field: keyof EditingState) => {
     setEditing(prev => ({ ...prev, [field]: false }));
@@ -139,7 +125,6 @@ export function EditProfile() {
         ...prev,
         [field]: (user as any)[field] || '',
       }));
-
 
       // 주소 취소 시 원래 주소 데이터로 복원
       if (field === 'address' && user.address) {
@@ -162,7 +147,6 @@ export function EditProfile() {
     setErrors({});
   };
 
-
   const handleAddressSearch = () => {
     new window.daum.Postcode({
       oncomplete: function(data: any) {
@@ -178,14 +162,12 @@ export function EditProfile() {
     }).open();
   };
 
-
   const handleAddressDetailChange = (value: string) => {
     setAddressData(prev => ({ ...prev, addressDetail: value }));
     // formData 업데이트
     const fullAddress = `${addressData.postcode} ${addressData.address} ${value}`.trim();
     setFormData(prev => ({ ...prev, address: fullAddress }));
   };
-
 
   const validateField = (field: string, value: string): string | null => {
     if (field === 'nickname') {
@@ -204,7 +186,6 @@ export function EditProfile() {
     return null;
   };
 
-
   const handleSave = async (field: keyof FormData) => {
     const value = formData[field];
     
@@ -217,7 +198,6 @@ export function EditProfile() {
         return;
       }
     }
-
 
     setSavingField(field);
     
@@ -250,7 +230,6 @@ export function EditProfile() {
     }
   };
 
-
   const handleChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field as keyof Errors]) {
@@ -258,11 +237,18 @@ export function EditProfile() {
     }
   };
 
+  const handleCopyInvitationCode = () => {
+    const code = (user as any).invitationCode || '';
+    if (code) {
+      navigator.clipboard.writeText(code);
+      toast.success('초대 코드가 복사되었습니다! 👏');
+    } else {
+      toast.error('초대 코드가 없습니다.');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      
-
       {/* 헤더 */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -280,12 +266,11 @@ export function EditProfile() {
         </div>
       </header>
 
-
       {/* 메인 콘텐츠 */}
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-2xl shadow-lg p-8">
           
-          {/* 이름 (읽기 전용) */}
+          {/* 1. 이름 (읽기 전용) */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               이름
@@ -303,8 +288,7 @@ export function EditProfile() {
             </div>
           </div>
 
-
-          {/* 이메일 (읽기 전용) */}
+          {/* 2. 이메일 (읽기 전용) */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               이메일
@@ -322,29 +306,7 @@ export function EditProfile() {
             </div>
           </div>
 
-
-          {/* 초대 코드 (읽기 전용) */}
-          {(user as any).invitationCode && (
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                초대 코드
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Shield className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  value={(user as any).invitationCode}
-                  disabled
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700"
-                />
-              </div>
-            </div>
-          )}
-
-
-          {/* 닉네임 (수정 가능) */}
+          {/* 3. 닉네임 (수정 가능) */}
           <div className="mb-6">
             <label htmlFor="nickname" className="block text-sm font-medium text-gray-700 mb-2">
               닉네임
@@ -408,8 +370,7 @@ export function EditProfile() {
             )}
           </div>
 
-
-          {/* 전화번호 (수정 가능) */}
+          {/* 4. 전화번호 (수정 가능) */}
           <div className="mb-6">
             <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
               전화번호
@@ -473,8 +434,7 @@ export function EditProfile() {
             )}
           </div>
 
-
-          {/* 주소 (수정 가능) */}
+          {/* 5. 주소 (수정 가능) */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               주소 (선택)
@@ -571,6 +531,38 @@ export function EditProfile() {
             )}
           </div>
 
+          {/* 6. 초대 코드 (읽기 전용 - 맨 아래로 이동) */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              초대 코드
+            </label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Users className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={(user as any).invitationCode || ''}
+                  disabled
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-mono text-lg"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyInvitationCode}
+                className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+              >
+                <Copy className="w-4 h-4" />
+                복사
+              </button>
+            </div>
+            {(user as any).invitationCode && (
+              <p className="mt-1 text-xs text-purple-600 font-medium">
+                친구에게 공유하면 둘 다 티켓을 받습니다!
+              </p>
+            )}
+          </div>
 
         </div>
       </main>

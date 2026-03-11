@@ -15,10 +15,12 @@ import { DrawsListPage } from '@/components/draw/DrawsListPage';
 import { CreateDrawPage } from '@/components/draw/CreateDrawPage';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
+import { AuthProvider } from './contexts/AuthContext';
 
 
 export default function App() {
   return (
+    <AuthProvider>
       <BrowserRouter>
         <Toaster 
           position="top-center"
@@ -59,5 +61,6 @@ export default function App() {
           <Route path="/missions" element={<MissionsPage />} />
         </Routes>
       </BrowserRouter>
+    </AuthProvider>
   );
 }

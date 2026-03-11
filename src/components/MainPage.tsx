@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { PlusCircle } from "lucide-react";
 import { TopAppBar } from "@/components/TopAppBar";
 import { HeroSection } from "@/components/HeroSection";
 import { DrawCard } from "@/components/draw/DrawCard";
-import { TicketHistoryPreview } from "@/components/TicketHistoryPreview";
-import { DrawResultCard } from "@/components/draw/DrawResultCard";
 import { getDraws } from "@/api/draw";
+import { useAuth } from "@/contexts/AuthContext";
 import type { DrawCardResponse } from "@/types/draw";
-import type { TicketHistoryItem } from "@/components/TicketHistoryPreview";
-import type { DrawResultItem } from "@/components/draw/DrawResultCard";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 
@@ -24,50 +23,19 @@ const heroDrawData = {
   liked: false,
 };
 
-const ticketHistory: TicketHistoryItem[] = [
-  { id: 1, type: "지급", amount: 10, reason: "회원가입 보너스", date: "2026-01-19" },
-  { id: 2, type: "사용", amount: -5, reason: "Apple Watch 응모", date: "2026-01-19" },
-  { id: 3, type: "지급", amount: 5, reason: "출석 체크", date: "2026-01-18" },
-  { id: 4, type: "사용", amount: -3, reason: "iPhone 15 응모", date: "2026-01-18" },
-];
-
-const drawResults: DrawResultItem[] = [
-  {
-    id: 1,
-    title: "AirPods Pro",
-    status: "당첨",
-    message: "축하합니다! 🎉",
-    date: "2026-01-15",
-    image: "https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=400",
-  },
-  {
-    id: 2,
-    title: "Galaxy Buds",
-    status: "미당첨",
-    message: "다음 기회에 도전하세요!",
-    date: "2026-01-12",
-    image: "https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=400",
-  },
-];
-
 export function MainPage() {
   const [userTickets] = useState(120);
   const [ongoingDraws, setOngoingDraws] = useState<DrawCardResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchDraws = async () => {
       try {
         setLoading(true);
         setError(null);
-
-        const data = await getDraws({
-          tab: "ONGOING",
-          page: 0,
-          size: 6,
-        });
-
+        const data = await getDraws({ tab: "ONGOING", page: 0, size: 6 });
         setOngoingDraws(data.content);
       } catch (err) {
         console.error(err);
@@ -76,7 +44,6 @@ export function MainPage() {
         setLoading(false);
       }
     };
-
     fetchDraws();
   }, []);
 
@@ -106,32 +73,6 @@ export function MainPage() {
             </div>
           )}
         </section>
-
-        <div className="mt-12 grid grid-cols-1 gap-8 lg:grid-cols-2">
-          <section>
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">티켓 내역</h2>
-              <button className="text-sm font-medium text-purple-600 transition-colors hover:text-purple-700">
-                전체보기 →
-              </button>
-            </div>
-            <TicketHistoryPreview history={ticketHistory} />
-          </section>
-
-          <section>
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">최근 결과</h2>
-              <button className="text-sm font-medium text-purple-600 transition-colors hover:text-purple-700">
-                전체보기 →
-              </button>
-            </div>
-            <div className="space-y-4">
-              {drawResults.map((result) => (
-                <DrawResultCard key={result.id} result={result} />
-              ))}
-            </div>
-          </section>
-        </div>
       </main>
 
       <footer className="mt-16 border-t border-gray-200 bg-white">
@@ -141,6 +82,19 @@ export function MainPage() {
           </div>
         </div>
       </footer>
+
+      {/* HOST 전용 FAB */}
+      {user?.role === 'HOST' && (
+        <Link
+          to="/draws/create"
+          className="fixed bottom-8 right-8 z-50 flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-5 py-3.5 rounded-full shadow-lg hover:from-purple-700 hover:to-pink-700 hover:shadow-xl transition-all duration-200 group"
+        >
+          <PlusCircle className="w-5 h-5" />
+          <span className="text-sm font-semibold max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 whitespace-nowrap">
+            드로우 생성
+          </span>
+        </Link>
+      )}
     </div>
   );
 }
