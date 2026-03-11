@@ -23,6 +23,7 @@ export interface DrawDetailResponse {
   startAt: string;
   endAt: string;
   status: DrawStatus;
+  myTicketBalance: number;
 
   isBookmarked: boolean;
   participantCount: number;

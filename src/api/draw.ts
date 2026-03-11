@@ -32,10 +32,16 @@ export async function getDraws(params: GetDrawCardParams) {
 }
 
 export async function getDrawDetail(drawId: number | string): Promise<DrawDetailResponse> {
-  console.log('getDrawDetail drawId =', drawId);
   const response = await api.get<DrawDetailResponse>(`/api/draws/${drawId}`);
-  console.log('detail response =', response.data);
   return response.data;
+}
+
+export async function bookmarkDraw(drawId: number | string): Promise<void> {
+  await api.post(`/api/draws/${drawId}/bookmark`);
+}
+
+export async function unbookmarkDraw(drawId: number | string): Promise<void> {
+  await api.delete(`/api/draws/${drawId}/bookmark`);
 }
 
 export async function entryDraw(
