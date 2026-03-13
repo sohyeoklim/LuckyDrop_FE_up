@@ -4,10 +4,7 @@ import { PlusCircle } from "lucide-react";
 import { TopAppBar } from "@/components/TopAppBar";
 import { HeroSection } from "@/components/draw/HeroSection";
 import { DrawCard } from "@/components/draw/DrawCard";
-import { TicketHistoryPreview } from "@/components/TicketHistoryPreview";
-import { DrawResultCard } from "@/components/draw/DrawResultCard";
 import { getDraws, getHotBanner } from "@/api/draw";
-import { getDraws } from "@/api/draw";
 import { useAuth } from "@/contexts/AuthContext";
 import type { DrawCardResponse } from "@/types/draw";
 import type { TicketHistoryItem } from "@/components/TicketHistoryPreview";
@@ -74,8 +71,6 @@ export function MainPage() {
 
         setOngoingDraws(drawsData.content);
         setHotBanner(hotBannerData);
-        const data = await getDraws({ tab: "ONGOING", page: 0, size: 6 });
-        setOngoingDraws(data.content);
       } catch (err) {
         console.error(err);
         setError("메인 화면 데이터를 불러오지 못했습니다.");
@@ -113,9 +108,12 @@ export function MainPage() {
         <section className="mt-12">
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-900">진행 중인 드로우</h2>
-            <button className="text-sm font-medium text-purple-600 transition-colors hover:text-purple-700">
+            <Link
+              to="/draws"
+              className="text-sm font-medium text-purple-600 transition-colors hover:text-purple-700"
+            >
               전체보기 →
-            </button>
+            </Link>
           </div>
 
           {loading && <p>불러오는 중...</p>}

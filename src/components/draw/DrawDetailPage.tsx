@@ -107,7 +107,6 @@ export function DrawDetailPage() {
   };
 
   const handleLike = () => {
-    console.log('하트 클릭됨', { id, bookmarked, isBookmarkPending });
     if (!id) return;
     if (isBookmarkPending) return;
 
@@ -227,28 +226,36 @@ export function DrawDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center h-16">
-            <button
-              onClick={() => navigate(-1)}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span className="font-medium">돌아가기</span>
-            </button>
-          </div>
+  <div className="min-h-screen bg-gray-50">
+    <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center h-16">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span className="font-medium">돌아가기</span>
+          </button>
         </div>
-      </header>
+      </div>
+    </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        {/* 왼쪽 컬럼 */}
+        <div className="space-y-4">
           <div className="bg-white rounded-2xl shadow-lg overflow-hidden relative">
+            {/* 상태 뱃지 -> 이미지 위로 이동 */}
+            <div className="absolute top-4 left-4 z-20">
+              {getStatusBadge(draw.status)}
+            </div>
+
+            {/* 북마크 버튼 */}
             <button
               onClick={handleLike}
               disabled={isBookmarkPending}
-              className="absolute top-4 right-4 z-10 p-3 rounded-full bg-white/90 shadow-md hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="absolute top-4 right-4 z-20 p-3 rounded-full bg-white/90 shadow-md hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Heart
                 className={`w-6 h-6 transition-colors ${
@@ -259,175 +266,196 @@ export function DrawDetailPage() {
 
             <Slider {...sliderSettings}>
               {imageList.map((image, index) => (
-                <div key={index} className="aspect-square">
-                  <img
-                    src={image}
-                    alt={`${draw.productName} ${index + 1}`}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      if (!target.src.includes('/placeholder.png')) {
-                        target.src = '/placeholder.png';
-                      }
-                    }}
-                  />
+                <div key={index}>
+                  <div className="aspect-square overflow-hidden bg-gray-100">
+                    <img
+                      src={image}
+                      alt={`${draw.productName} ${index + 1}`}
+                      className="block w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.src.includes('/placeholder.png')) {
+                          target.src = '/placeholder.png';
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
               ))}
             </Slider>
           </div>
 
-          <div className="space-y-6">
-            <div>{getStatusBadge(draw.status)}</div>
-
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{draw.title}</h1>
-              <p className="text-gray-600">{draw.description}</p>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white rounded-2xl shadow-lg p-4 text-center">
+              <Clock className="w-6 h-6 text-purple-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-600">남은 시간</p>
+              <p className="text-lg font-bold text-gray-900">{timeLeftText}</p>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <p className="text-sm text-gray-500 mb-1">{draw.brand}</p>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">{draw.productName}</h2>
-              <p className="text-sm text-gray-600">
-                소비자 가격: {formatPrice(draw.price)}원
+            <div className="bg-white rounded-2xl shadow-lg p-4 text-center">
+              <Users className="w-6 h-6 text-purple-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-600">응모자 수</p>
+              <p className="text-lg font-bold text-gray-900">
+                {draw.participantCount}명
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-gray-50 rounded-xl p-4 text-center">
-                <Clock className="w-6 h-6 text-purple-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">남은 시간</p>
-                <p className="text-lg font-bold text-gray-900">{timeLeftText}</p>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-4 text-center">
-                <Users className="w-6 h-6 text-purple-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">응모자 수</p>
-                <p className="text-lg font-bold text-gray-900">{draw.participantCount}명</p>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-4 text-center">
-                <Ticket className="w-6 h-6 text-purple-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">응모 비용</p>
-                <p className="text-lg font-bold text-gray-900">{draw.ticketCostEntry}T</p>
-              </div>
+            <div className="bg-white rounded-2xl shadow-lg p-4 text-center">
+              <Ticket className="w-6 h-6 text-purple-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-600">응모 비용</p>
+              <p className="text-lg font-bold text-gray-900">
+                {draw.ticketCostEntry}T
+              </p>
             </div>
-
-            {draw.status === 'ACTIVE' && (
-              <div className="bg-white rounded-2xl shadow-lg p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">응모하기</h3>
-
-                <div className="mb-4 text-sm text-gray-600">
-                  당첨 인원{' '}
-                  <span className="font-semibold text-gray-900">{draw.winnerCount}명</span>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    응모 횟수
-                  </label>
-                  <div className="flex items-center gap-4">
-                    <button
-                      onClick={() => setEntryCount(Math.max(1, entryCount - 1))}
-                      className="w-10 h-10 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                    >
-                      -
-                    </button>
-
-                    <input
-                      type="number"
-                      value={entryCount}
-                      onChange={(e) =>
-                        setEntryCount(Math.max(1, parseInt(e.target.value, 10) || 1))
-                      }
-                      className="w-20 text-center border border-gray-300 rounded-lg py-2"
-                      min="1"
-                    />
-
-                    <button
-                      onClick={() => setEntryCount(entryCount + 1)}
-                      className="w-10 h-10 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-purple-50 rounded-xl p-4 mb-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-gray-600">보유 티켓</span>
-                    <span className="text-sm font-medium text-gray-900">{userTickets}T</span>
-                  </div>
-
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-gray-600">사용 티켓</span>
-                    <span className="text-sm font-medium text-purple-600">{totalCost}T</span>
-                  </div>
-
-                  <div className="pt-2 border-t border-purple-200">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-900">남은 티켓</span>
-                      <span className="text-sm font-bold text-gray-900">{remainingTickets}T</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleEntry}
-                  disabled={userTickets < totalCost}
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-4 rounded-xl font-medium hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {userTickets < totalCost ? '티켓이 부족합니다' : `${entryCount}회 응모하기`}
-                </button>
-              </div>
-            )}
-
-            {draw.status !== 'ACTIVE' && (
-              <div className="bg-gray-50 rounded-2xl p-6 text-center">
-                <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600">
-                  {draw.status === 'DRAFT' && '아직 응모 시작 전입니다.'}
-                  {draw.status === 'DRAWING' && '추첨이 진행 중입니다.'}
-                  {draw.status === 'CLOSE' && '드로우가 종료되었습니다.'}
-                  {draw.status === 'CANCEL' && '드로우가 취소되었습니다. 티켓이 환불됩니다.'}
-                </p>
-              </div>
-            )}
           </div>
         </div>
 
-        <div className="mt-8 bg-white rounded-2xl shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">상품</h2>
-          <p className="text-gray-600 leading-relaxed mb-6">{draw.productDescription}</p>
+        {/* 오른쪽 컬럼 */}
+        <div className="space-y-6 pt-1">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{draw.title}</h1>
+            <p className="text-gray-600">{draw.description}</p>
+          </div>
 
-          <h3 className="text-xl font-bold text-gray-900 mb-3">상세 정보</h3>
-          <ul className="space-y-2">
-            <li className="flex items-start gap-2 text-gray-600">
-              <span className="text-purple-600 font-bold">•</span>
-              <span>브랜드: {draw.brand}</span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-600">
-              <span className="text-purple-600 font-bold">•</span>
-              <span>상품명: {draw.productName}</span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-600">
-              <span className="text-purple-600 font-bold">•</span>
-              <span>당첨 인원: {draw.winnerCount}명</span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-600">
-              <span className="text-purple-600 font-bold">•</span>
-              <span>북마크 수: {bookmarkCount}개</span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-600">
-              <span className="text-purple-600 font-bold">•</span>
-              <span>응모 시작: {formatDateTime(draw.startAt)}</span>
-            </li>
-            <li className="flex items-start gap-2 text-gray-600">
-              <span className="text-purple-600 font-bold">•</span>
-              <span>응모 종료: {formatDateTime(draw.endAt)}</span>
-            </li>
-          </ul>
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <p className="text-sm text-gray-500 mb-1">{draw.brand}</p>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              {draw.productName}
+            </h2>
+            <p className="text-sm text-gray-600">
+              소비자 가격: {formatPrice(draw.price)}원
+            </p>
+          </div>
+
+          {draw.status === 'ACTIVE' && (
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">응모하기</h3>
+
+              <div className="mb-4 text-sm text-gray-600">
+                당첨 인원{" "}
+                <span className="font-semibold text-gray-900">
+                  {draw.winnerCount}명
+                </span>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  응모 횟수
+                </label>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setEntryCount(Math.max(1, entryCount - 1))}
+                    className="w-10 h-10 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    -
+                  </button>
+
+                  <input
+                    type="number"
+                    value={entryCount}
+                    onChange={(e) =>
+                      setEntryCount(
+                        Math.max(1, parseInt(e.target.value, 10) || 1)
+                      )
+                    }
+                    className="w-20 text-center border border-gray-300 rounded-lg py-2"
+                    min="1"
+                  />
+
+                  <button
+                    onClick={() => setEntryCount(entryCount + 1)}
+                    className="w-10 h-10 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-purple-50 rounded-xl p-4 mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600">보유 티켓</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {userTickets}T
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600">사용 티켓</span>
+                  <span className="text-sm font-medium text-purple-600">
+                    {totalCost}T
+                  </span>
+                </div>
+
+                <div className="pt-2 border-t border-purple-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-900">
+                      남은 티켓
+                    </span>
+                    <span className="text-sm font-bold text-gray-900">
+                      {remainingTickets}T
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleEntry}
+                disabled={userTickets < totalCost}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-4 rounded-xl font-medium hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {userTickets < totalCost
+                  ? '티켓이 부족합니다'
+                  : `${entryCount}회 응모하기`}
+              </button>
+            </div>
+          )}
+
+          {draw.status !== 'ACTIVE' && (
+            <div className="bg-gray-50 rounded-2xl p-6 text-center">
+              <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600">
+                {draw.status === 'DRAFT' && '아직 응모 시작 전입니다.'}
+                {draw.status === 'DRAWING' && '추첨이 진행 중입니다.'}
+                {draw.status === 'CLOSE' && '드로우가 종료되었습니다.'}
+                {draw.status === 'CANCEL' &&
+                  '드로우가 취소되었습니다. 티켓이 환불됩니다.'}
+              </p>
+            </div>
+          )}
         </div>
-      </main>
-    </div>
+      </div>
+
+      <div className="mt-8 bg-white rounded-2xl shadow-lg p-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">상품</h2>
+        <p className="text-gray-600 leading-relaxed mb-6">
+          {draw.productDescription}
+        </p>
+
+        <h3 className="text-xl font-bold text-gray-900 mb-3">상세 정보</h3>
+        <ul className="space-y-2">
+          <li className="flex items-start gap-2 text-gray-600">
+            <span className="text-purple-600 font-bold">•</span>
+            <span>브랜드: {draw.brand}</span>
+          </li>
+          <li className="flex items-start gap-2 text-gray-600">
+            <span className="text-purple-600 font-bold">•</span>
+            <span>상품명: {draw.productName}</span>
+          </li>
+          <li className="flex items-start gap-2 text-gray-600">
+            <span className="text-purple-600 font-bold">•</span>
+            <span>당첨 인원: {draw.winnerCount}명</span>
+          </li>
+          <li className="flex items-start gap-2 text-gray-600">
+            <span className="text-purple-600 font-bold">•</span>
+            <span>응모 시작: {formatDateTime(draw.startAt)}</span>
+          </li>
+          <li className="flex items-start gap-2 text-gray-600">
+            <span className="text-purple-600 font-bold">•</span>
+            <span>응모 종료: {formatDateTime(draw.endAt)}</span>
+          </li>
+        </ul>
+      </div>
+    </main>
+  </div>
   );
 }

@@ -2,8 +2,14 @@ import { api } from "@/lib/axios";
 import type { DrawCardResponse, PageResponse, DrawDetailResponse } from "@/types/draw";
 
 export type DrawTab = "ALL" | "UPCOMING" | "ONGOING" | "CLOSED";
-export type DrawSort = "LATEST" | "BOOKMARK";
-
+export type DrawSort =
+  | "LATEST"
+  | "BOOKMARK"
+  | "STARTED_DESC"
+  | "PARTICIPANT"
+  | "ENDING_SOON"
+  | "ENDED_DESC";
+  
 export interface HotBannerResponse {
   drawId: number;
   reason: string;

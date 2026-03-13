@@ -13,40 +13,14 @@ import {
 import { useDrawList } from "@/hooks/useDrawList";
 import type { DrawSort } from "@/api/draw";
 import type { DrawCardResponse } from "@/types/draw";
+import {
+  getDrawStatusStyle,
+  getDrawTimeText,
+  isOpenDraw,
+  getTimeLeftMinutesForSort,
+} from "@/utils/draw";
 
-type SortOption = "latest" | "deadline" | "popular";
-
-function getTimeLeftText(endAt: string) {
-  const now = new Date();
-  const end = new Date(endAt);
-  const diff = end.getTime() - now.getTime();
-
-  if (diff <= 0) return "응모 마감";
-
-  const totalSeconds = Math.floor(diff / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  const hh = String(hours).padStart(2, "0");
-  const mm = String(minutes).padStart(2, "0");
-  const ss = String(seconds).padStart(2, "0");
-
-  return `${hh}:${mm}:${ss}`;
-}
-
-function getTimeLeftMinutes(endAt: string) {
-  const now = new Date();
-  const end = new Date(endAt);
-  const diff = end.getTime() - now.getTime();
-
-  if (diff <= 0) return 0;
-  return Math.floor(diff / 1000 / 60);
-}
-
-function isOpenDraw(endAt: string) {
-  return new Date(endAt).getTime() > Date.now();
-}
+type SortOption = "latest" | "deadline" | "popular" | "participant";
 
 export function DrawsListPage() {
   const navigate = useNavigate();
@@ -55,8 +29,20 @@ export function DrawsListPage() {
   const [sortOption, setSortOption] = useState<SortOption>("latest");
   const [showOnlyOpen, setShowOnlyOpen] = useState(true);
 
-  const serverSort: DrawSort =
-    sortOption === "popular" ? "BOOKMARK" : "LATEST";
+  const serverSort: DrawSort = (() => {
+  switch (sortOption) {
+    case "latest":
+      return "LATEST";
+    case "deadline":
+      return "ENDING_SOON";
+    case "popular":
+      return "BOOKMARK";
+    case "participant":
+      return "PARTICIPANT";
+    default:
+      return "LATEST";
+  }
+})();
 
   const { data, isLoading, isError } = useDrawList({
     tab: "ALL",
@@ -76,7 +62,9 @@ export function DrawsListPage() {
         draw.title.toLowerCase().includes(keyword) ||
         draw.productName.toLowerCase().includes(keyword);
 
-      const matchesStatus = !showOnlyOpen || isOpenDraw(draw.endAt);
+      const matchesStatus =
+        !showOnlyOpen ||
+        isOpenDraw(draw.status, draw.startAt, draw.endAt);
 
       return matchesSearch && matchesStatus;
     });
@@ -86,9 +74,14 @@ export function DrawsListPage() {
         case "latest":
           return new Date(b.startAt).getTime() - new Date(a.startAt).getTime();
         case "deadline":
-          return getTimeLeftMinutes(a.endAt) - getTimeLeftMinutes(b.endAt);
+          return (
+            getTimeLeftMinutesForSort(a.status, a.startAt, a.endAt) -
+            getTimeLeftMinutesForSort(b.status, b.startAt, b.endAt)
+          );
         case "popular":
           return b.bookmarkCount - a.bookmarkCount;
+        case "participant":
+          return b.participantCount - a.participantCount;
         default:
           return 0;
       }
@@ -100,7 +93,9 @@ export function DrawsListPage() {
   const stats = useMemo(() => {
     return {
       total: draws.length,
-      open: draws.filter((draw) => isOpenDraw(draw.endAt)).length,
+      open: draws.filter((draw) =>
+        isOpenDraw(draw.status, draw.startAt, draw.endAt)
+      ).length,
       totalLikes: draws.reduce((sum, draw) => sum + draw.bookmarkCount, 0),
     };
   }, [draws]);
@@ -183,6 +178,7 @@ export function DrawsListPage() {
                 <option value="latest">최신순</option>
                 <option value="deadline">마감 임박순</option>
                 <option value="popular">인기순 (찜 기준)</option>
+                <option value="participant">인기순 (응모자 기준)</option>
               </select>
             </div>
 
@@ -205,8 +201,17 @@ export function DrawsListPage() {
         {filteredDraws.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredDraws.map((draw) => {
-              const open = isOpenDraw(draw.endAt);
-              const timeLeftText = getTimeLeftText(draw.endAt);
+              const open = isOpenDraw(draw.status, draw.startAt, draw.endAt);
+              const timeLeftText = getDrawTimeText(
+                draw.status,
+                draw.startAt,
+                draw.endAt
+              );
+              const { label, className } = getDrawStatusStyle(
+                draw.status,
+                draw.startAt,
+                draw.endAt
+              );
 
               return (
                 <Link
@@ -242,13 +247,9 @@ export function DrawsListPage() {
 
                     <div className="absolute bottom-3 left-3">
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          open
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${className}`}
                       >
-                        {open ? "응모 가능" : "응모 마감"}
+                        {label}
                       </span>
                     </div>
                   </div>

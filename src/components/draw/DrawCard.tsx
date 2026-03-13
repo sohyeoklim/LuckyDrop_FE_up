@@ -9,6 +9,7 @@ interface DrawCardProps {
 }
 
 export function DrawCard({ draw }: DrawCardProps) {
+
   const [liked, setLiked] = useState(draw.isBookmarked);
 
   const handleLike = (e: React.MouseEvent) => {
@@ -18,8 +19,11 @@ export function DrawCard({ draw }: DrawCardProps) {
   };
 
   const timeText = getDrawTimeText(draw.status, draw.startAt, draw.endAt);
-  const statusLabel = getDrawStatusStyle(draw.status);
-  const { label, className } = getDrawStatusStyle(draw.status);
+  const { label, className } = getDrawStatusStyle(
+    draw.status,
+    draw.startAt,
+    draw.endAt
+);
 
   return (
     <Link
@@ -29,7 +33,7 @@ export function DrawCard({ draw }: DrawCardProps) {
       <div className="relative">
         <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
           <img
-            src={draw.imageUrl ? `http://localhost:8080${draw.imageUrl}` : "/placeholder.png"}
+            src={draw.imageUrl || "/placeholder.png"}
             alt={draw.title}
             onError={(e) => {
             const target = e.currentTarget;
