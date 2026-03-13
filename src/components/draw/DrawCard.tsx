@@ -29,7 +29,7 @@ export function DrawCard({ draw }: DrawCardProps) {
       <div className="relative">
         <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
           <img
-            src={draw.imageUrl || "/placeholder.png"}
+            src={draw.imageUrl ? `http://localhost:8080${draw.imageUrl}` : "/placeholder.png"}
             alt={draw.title}
             onError={(e) => {
             const target = e.currentTarget;

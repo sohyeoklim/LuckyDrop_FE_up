@@ -2,49 +2,91 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PlusCircle } from "lucide-react";
 import { TopAppBar } from "@/components/TopAppBar";
-import { HeroSection } from "@/components/HeroSection";
+import { HeroSection } from "@/components/draw/HeroSection";
 import { DrawCard } from "@/components/draw/DrawCard";
+import { TicketHistoryPreview } from "@/components/TicketHistoryPreview";
+import { DrawResultCard } from "@/components/draw/DrawResultCard";
+import { getDraws, getHotBanner } from "@/api/draw";
 import { getDraws } from "@/api/draw";
 import { useAuth } from "@/contexts/AuthContext";
 import type { DrawCardResponse } from "@/types/draw";
+import type { TicketHistoryItem } from "@/components/TicketHistoryPreview";
+import type { DrawResultItem } from "@/components/draw/DrawResultCard";
+import type { HotBannerResponse } from "@/api/draw";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 
-const heroDrawData = {
-  id: 1,
-  title: "Apple Watch Ultra",
-  description: "최신 스마트워치의 끝판왕",
-  images: [
-    "https://images.unsplash.com/photo-1670177257750-9b47927f68eb?w=800",
-    "https://images.unsplash.com/photo-1699265837122-7636e128b4b0?w=800",
-  ],
-  ticketCost: 5,
-  timeLeft: "23:45:12",
-  liked: false,
-};
+const ticketHistory: TicketHistoryItem[] = [
+  { id: 1, type: "지급", amount: 10, reason: "회원가입 보너스", date: "2026-01-19" },
+  { id: 2, type: "사용", amount: -5, reason: "Apple Watch 응모", date: "2026-01-19" },
+  { id: 3, type: "지급", amount: 5, reason: "출석 체크", date: "2026-01-18" },
+  { id: 4, type: "사용", amount: -3, reason: "iPhone 15 응모", date: "2026-01-18" },
+];
+
+const drawResults: DrawResultItem[] = [
+  {
+    id: 1,
+    title: "AirPods Pro",
+    status: "당첨",
+    message: "축하합니다! 🎉",
+    date: "2026-01-15",
+    image: "https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=400",
+  },
+  {
+    id: 2,
+    title: "Galaxy Buds",
+    status: "미당첨",
+    message: "다음 기회에 도전하세요!",
+    date: "2026-01-12",
+    image: "https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=400",
+  },
+];
 
 export function MainPage() {
   const [userTickets] = useState(120);
+
+  const [hotBanner, setHotBanner] = useState<HotBannerResponse | null>(null);
   const [ongoingDraws, setOngoingDraws] = useState<DrawCardResponse[]>([]);
+
   const [loading, setLoading] = useState(true);
+  const [hotBannerLoading, setHotBannerLoading] = useState(true);
+
   const [error, setError] = useState<string | null>(null);
+  const [hotBannerError, setHotBannerError] = useState<string | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
-    const fetchDraws = async () => {
+    const fetchMainData = async () => {
       try {
         setLoading(true);
+        setHotBannerLoading(true);
         setError(null);
+        setHotBannerError(null);
+
+        const [drawsData, hotBannerData] = await Promise.all([
+          getDraws({
+            tab: "ONGOING",
+            page: 0,
+            size: 6,
+          }),
+          getHotBanner(),
+        ]);
+
+        setOngoingDraws(drawsData.content);
+        setHotBanner(hotBannerData);
         const data = await getDraws({ tab: "ONGOING", page: 0, size: 6 });
         setOngoingDraws(data.content);
       } catch (err) {
         console.error(err);
-        setError("드로우 목록을 불러오지 못했습니다.");
+        setError("메인 화면 데이터를 불러오지 못했습니다.");
+        setHotBannerError("핫 배너를 불러오지 못했습니다.");
       } finally {
         setLoading(false);
+        setHotBannerLoading(false);
       }
     };
-    fetchDraws();
+
+    fetchMainData();
   }, []);
 
   return (
@@ -52,7 +94,21 @@ export function MainPage() {
       <TopAppBar tickets={userTickets} />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <HeroSection draw={heroDrawData} userTickets={userTickets} />
+        {hotBannerLoading && (
+          <div className="rounded-2xl bg-white p-8 shadow-lg">
+            <p className="text-gray-500">핫 배너 불러오는 중...</p>
+          </div>
+        )}
+
+        {!hotBannerLoading && hotBannerError && (
+          <div className="rounded-2xl bg-white p-8 shadow-lg">
+            <p className="text-red-500">{hotBannerError}</p>
+          </div>
+        )}
+
+        {!hotBannerLoading && !hotBannerError && hotBanner && (
+          <HeroSection draw={hotBanner} userTickets={userTickets} />
+        )}
 
         <section className="mt-12">
           <div className="mb-6 flex items-center justify-between">

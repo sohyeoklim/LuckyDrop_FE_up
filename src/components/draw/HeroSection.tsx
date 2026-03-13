@@ -3,21 +3,40 @@ import { Link } from 'react-router-dom';
 import Slider from 'react-slick';
 import { Heart, Clock, Ticket } from 'lucide-react';
 
+interface HotBannerResponse {
+  drawId: number;
+  reason: string;
+  title: string;
+  productName: string;
+  images: string[];
+  isBookmarked: boolean;
+  ticketCostEntry: number;
+  startAt: string;
+  endAt: string;
+}
+
 interface HeroSectionProps {
-  draw: {
-    id: number;
-    title: string;
-    description: string;
-    images: string[];
-    ticketCost: number;
-    timeLeft: string;
-    liked: boolean;
-  };
+  draw: HotBannerResponse;
   userTickets: number;
 }
 
+function getTimeLeft(endAt: string) {
+  const now = new Date();
+  const end = new Date(endAt);
+  const diff = end.getTime() - now.getTime();
+
+  if (diff <= 0) return "응모 마감";
+
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (hours > 0) return `${hours}시간 ${minutes}분`;
+  return `${minutes}분`;
+}
+
 export function HeroSection({ draw, userTickets }: HeroSectionProps) {
-  const [liked, setLiked] = useState(draw.liked);
+
+  const [liked, setLiked] = useState(draw.isBookmarked);
 
   const sliderSettings = {
     dots: true,
@@ -30,9 +49,12 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
     arrows: false,
   };
 
+  const timeLeft = getTimeLeft(draw.endAt);
+
   return (
     <section className="bg-white rounded-2xl shadow-lg overflow-hidden">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
         {/* 이미지 캐러셀 */}
         <div className="relative">
           <Slider {...sliderSettings}>
@@ -64,48 +86,60 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
 
         {/* 정보 */}
         <div className="p-8 lg:p-10 flex flex-col justify-center">
+
           <div className="inline-block px-4 py-1.5 bg-purple-100 text-purple-700 rounded-full text-sm font-semibold mb-4 w-fit">
             🔥 HOT EVENT
           </div>
-          
-          <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-3">{draw.title}</h2>
-          <p className="text-lg text-gray-600 mb-6">{draw.description}</p>
+
+          {/* 상품명 */}
+          <p className="text-sm text-gray-500 mb-1">{draw.productName}</p>
+
+          {/* 드로우 제목 */}
+          <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-6">
+            {draw.title}
+          </h2>
 
           {/* 통계 정보 */}
           <div className="flex items-center gap-6 mb-8">
+
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-purple-600" />
               <div>
                 <p className="text-xs text-gray-500">남은 시간</p>
-                <p className="font-bold text-purple-600">{draw.timeLeft}</p>
+                <p className="font-bold text-purple-600">{timeLeft}</p>
               </div>
             </div>
+
             <div className="h-10 w-px bg-gray-300"></div>
+
             <div className="flex items-center gap-2">
               <Ticket className="w-5 h-5 text-purple-600" />
               <div>
                 <p className="text-xs text-gray-500">필요 티켓</p>
-                <p className="font-bold text-purple-600">{draw.ticketCost}장</p>
+                <p className="font-bold text-purple-600">{draw.ticketCostEntry}장</p>
               </div>
             </div>
+
           </div>
 
           {/* 응모 버튼 */}
           <div className="flex items-center gap-4">
             <Link
-              to={`/draw/${draw.id}`}
+              to={`/draw/${draw.drawId}`}
               className={`flex-1 px-8 py-4 rounded-xl font-bold text-white text-lg shadow-lg transition-all hover:scale-105 text-center ${
-                userTickets < draw.ticketCost
+                userTickets < draw.ticketCostEntry
                   ? 'bg-gray-400 cursor-not-allowed pointer-events-none'
                   : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:shadow-xl'
               }`}
             >
               지금 응모하기
             </Link>
+
             <div className="text-sm text-gray-600">
               보유 티켓: <span className="font-bold text-purple-600">{userTickets}장</span>
             </div>
           </div>
+
         </div>
       </div>
     </section>
