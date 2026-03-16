@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import Slider from 'react-slick';
-import { Heart, Clock, Ticket } from 'lucide-react';
+import { Link } from "react-router-dom";
+import Slider from "react-slick";
+import { Heart, Clock, Ticket } from "lucide-react";
+import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
+import toast from "react-hot-toast";
+import axios from "axios";
 
 interface HotBannerResponse {
   drawId: number;
@@ -35,8 +37,7 @@ function getTimeLeft(endAt: string) {
 }
 
 export function HeroSection({ draw, userTickets }: HeroSectionProps) {
-
-  const [liked, setLiked] = useState(draw.isBookmarked);
+  const { mutate: toggleBookmark, isPending } = useToggleDrawBookmark();
 
   const sliderSettings = {
     dots: true,
@@ -50,58 +51,97 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
   };
 
   const timeLeft = getTimeLeft(draw.endAt);
+  const imageList =
+    draw.images && draw.images.length > 0 ? draw.images : ["/placeholder.png"];
+
+  const handleLike = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (isPending) return;
+
+    const nextBookmarked = !draw.isBookmarked;
+
+    toggleBookmark(
+      {
+        drawId: draw.drawId,
+        nextBookmarked,
+      },
+      {
+        onSuccess: () => {
+          toast.dismiss("bookmark");
+          toast.success(nextBookmarked ? "북마크 추가" : "북마크 해제", {
+            id: "bookmark",
+          });
+        },
+        onError: (error) => {
+          console.error(error);
+
+          if (axios.isAxiosError(error) && error.response?.status === 401) {
+            toast.error("로그인이 필요한 서비스입니다.");
+            return;
+          }
+
+          toast.error("북마크 처리 실패");
+        },
+      }
+    );
+  };
 
   return (
     <section className="bg-white rounded-2xl shadow-lg overflow-hidden">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-        {/* 이미지 캐러셀 */}
         <div className="relative">
           <Slider {...sliderSettings}>
-            {draw.images.map((image, index) => (
+            {imageList.map((image, index) => (
               <div key={index} className="relative">
                 <div className="aspect-square lg:aspect-[4/3] bg-gradient-to-br from-purple-100 to-pink-100">
                   <img
                     src={image}
                     alt={`${draw.title} ${index + 1}`}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (!target.src.includes("/placeholder.png")) {
+                        target.src = "/placeholder.png";
+                      }
+                    }}
                   />
                 </div>
               </div>
             ))}
           </Slider>
 
-          {/* 찜 버튼 */}
           <button
-            onClick={() => setLiked(!liked)}
-            className="absolute top-6 right-6 z-10 w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+            type="button"
+            onClick={handleLike}
+            disabled={isPending}
+            className="absolute top-6 right-6 z-10 w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Heart
-              className={`w-6 h-6 ${
-                liked ? 'fill-red-500 text-red-500' : 'text-gray-600'
+              className={`w-6 h-6 transition-colors ${
+                draw.isBookmarked ? "fill-red-500 text-red-500" : "text-gray-600"
               }`}
             />
           </button>
         </div>
 
-        {/* 정보 */}
         <div className="p-8 lg:p-10 flex flex-col justify-center">
-
           <div className="inline-block px-4 py-1.5 bg-purple-100 text-purple-700 rounded-full text-sm font-semibold mb-4 w-fit">
             🔥 HOT EVENT
           </div>
 
-          {/* 상품명 */}
+          {draw.reason && (
+            <p className="text-sm text-pink-500 font-medium mb-2">{draw.reason}</p>
+          )}
+
           <p className="text-sm text-gray-500 mb-1">{draw.productName}</p>
 
-          {/* 드로우 제목 */}
           <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-6">
             {draw.title}
           </h2>
 
-          {/* 통계 정보 */}
           <div className="flex items-center gap-6 mb-8">
-
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-purple-600" />
               <div>
@@ -116,30 +156,30 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
               <Ticket className="w-5 h-5 text-purple-600" />
               <div>
                 <p className="text-xs text-gray-500">필요 티켓</p>
-                <p className="font-bold text-purple-600">{draw.ticketCostEntry}장</p>
+                <p className="font-bold text-purple-600">
+                  {draw.ticketCostEntry}장
+                </p>
               </div>
             </div>
-
           </div>
 
-          {/* 응모 버튼 */}
           <div className="flex items-center gap-4">
             <Link
-              to={`/draw/${draw.drawId}`}
+              to={`/draws/${draw.drawId}`}
               className={`flex-1 px-8 py-4 rounded-xl font-bold text-white text-lg shadow-lg transition-all hover:scale-105 text-center ${
                 userTickets < draw.ticketCostEntry
-                  ? 'bg-gray-400 cursor-not-allowed pointer-events-none'
-                  : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:shadow-xl'
+                  ? "bg-gray-400 cursor-not-allowed pointer-events-none"
+                  : "bg-gradient-to-r from-purple-600 to-pink-600 hover:shadow-xl"
               }`}
             >
               지금 응모하기
             </Link>
 
             <div className="text-sm text-gray-600">
-              보유 티켓: <span className="font-bold text-purple-600">{userTickets}장</span>
+              보유 티켓:{" "}
+              <span className="font-bold text-purple-600">{userTickets}장</span>
             </div>
           </div>
-
         </div>
       </div>
     </section>

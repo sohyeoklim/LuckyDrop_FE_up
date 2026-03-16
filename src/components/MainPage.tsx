@@ -1,88 +1,32 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { PlusCircle } from "lucide-react";
 import { TopAppBar } from "@/components/TopAppBar";
 import { HeroSection } from "@/components/draw/HeroSection";
 import { DrawCard } from "@/components/draw/DrawCard";
-import { getDraws, getHotBanner } from "@/api/draw";
 import { useAuth } from "@/contexts/AuthContext";
-import type { DrawCardResponse } from "@/types/draw";
-import type { TicketHistoryItem } from "@/components/TicketHistoryPreview";
-import type { DrawResultItem } from "@/components/draw/DrawResultCard";
-import type { HotBannerResponse } from "@/api/draw";
+import { useHotBanner } from "@/hooks/useHotBanner";
+import { useOngoingDraws } from "@/hooks/useOngoingDraws";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 
-const ticketHistory: TicketHistoryItem[] = [
-  { id: 1, type: "지급", amount: 10, reason: "회원가입 보너스", date: "2026-01-19" },
-  { id: 2, type: "사용", amount: -5, reason: "Apple Watch 응모", date: "2026-01-19" },
-  { id: 3, type: "지급", amount: 5, reason: "출석 체크", date: "2026-01-18" },
-  { id: 4, type: "사용", amount: -3, reason: "iPhone 15 응모", date: "2026-01-18" },
-];
-
-const drawResults: DrawResultItem[] = [
-  {
-    id: 1,
-    title: "AirPods Pro",
-    status: "당첨",
-    message: "축하합니다! 🎉",
-    date: "2026-01-15",
-    image: "https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=400",
-  },
-  {
-    id: 2,
-    title: "Galaxy Buds",
-    status: "미당첨",
-    message: "다음 기회에 도전하세요!",
-    date: "2026-01-12",
-    image: "https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=400",
-  },
-];
-
 export function MainPage() {
   const [userTickets] = useState(120);
-
-  const [hotBanner, setHotBanner] = useState<HotBannerResponse | null>(null);
-  const [ongoingDraws, setOngoingDraws] = useState<DrawCardResponse[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [hotBannerLoading, setHotBannerLoading] = useState(true);
-
-  const [error, setError] = useState<string | null>(null);
-  const [hotBannerError, setHotBannerError] = useState<string | null>(null);
   const { user } = useAuth();
 
-  useEffect(() => {
-    const fetchMainData = async () => {
-      try {
-        setLoading(true);
-        setHotBannerLoading(true);
-        setError(null);
-        setHotBannerError(null);
+  const {
+    data: hotBanner,
+    isLoading: hotBannerLoading,
+    isError: isHotBannerError,
+  } = useHotBanner();
 
-        const [drawsData, hotBannerData] = await Promise.all([
-          getDraws({
-            tab: "ONGOING",
-            page: 0,
-            size: 6,
-          }),
-          getHotBanner(),
-        ]);
+  const {
+    data: ongoingData,
+    isLoading: ongoingLoading,
+    isError: isOngoingError,
+  } = useOngoingDraws();
 
-        setOngoingDraws(drawsData.content);
-        setHotBanner(hotBannerData);
-      } catch (err) {
-        console.error(err);
-        setError("메인 화면 데이터를 불러오지 못했습니다.");
-        setHotBannerError("핫 배너를 불러오지 못했습니다.");
-      } finally {
-        setLoading(false);
-        setHotBannerLoading(false);
-      }
-    };
-
-    fetchMainData();
-  }, []);
+  const ongoingDraws = ongoingData?.content ?? [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -95,13 +39,13 @@ export function MainPage() {
           </div>
         )}
 
-        {!hotBannerLoading && hotBannerError && (
+        {!hotBannerLoading && isHotBannerError && (
           <div className="rounded-2xl bg-white p-8 shadow-lg">
-            <p className="text-red-500">{hotBannerError}</p>
+            <p className="text-red-500">핫 배너를 불러오지 못했습니다.</p>
           </div>
         )}
 
-        {!hotBannerLoading && !hotBannerError && hotBanner && (
+        {!hotBannerLoading && !isHotBannerError && hotBanner && (
           <HeroSection draw={hotBanner} userTickets={userTickets} />
         )}
 
@@ -116,10 +60,13 @@ export function MainPage() {
             </Link>
           </div>
 
-          {loading && <p>불러오는 중...</p>}
-          {error && <p className="text-red-500">{error}</p>}
+          {ongoingLoading && <p>불러오는 중...</p>}
 
-          {!loading && !error && (
+          {!ongoingLoading && isOngoingError && (
+            <p className="text-red-500">메인 화면 데이터를 불러오지 못했습니다.</p>
+          )}
+
+          {!ongoingLoading && !isOngoingError && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {ongoingDraws.map((draw) => (
                 <DrawCard key={draw.drawId} draw={draw} />
@@ -137,14 +84,13 @@ export function MainPage() {
         </div>
       </footer>
 
-      {/* HOST 전용 FAB */}
-      {user?.role === 'HOST' && (
+      {user?.role === "HOST" && (
         <Link
           to="/draws/create"
-          className="fixed bottom-8 right-8 z-50 flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-5 py-3.5 rounded-full shadow-lg hover:from-purple-700 hover:to-pink-700 hover:shadow-xl transition-all duration-200 group"
+          className="fixed bottom-8 right-8 z-50 flex items-center gap-2 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-3.5 text-white shadow-lg transition-all duration-200 group hover:from-purple-700 hover:to-pink-700 hover:shadow-xl"
         >
           <PlusCircle className="w-5 h-5" />
-          <span className="text-sm font-semibold max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 whitespace-nowrap">
+          <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold transition-all duration-300 group-hover:max-w-xs">
             드로우 생성
           </span>
         </Link>

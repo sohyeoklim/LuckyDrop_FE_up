@@ -1,5 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
+import toast from "react-hot-toast";
+import axios from "axios";
 import {
   ArrowLeft,
   Search,
@@ -30,19 +33,19 @@ export function DrawsListPage() {
   const [showOnlyOpen, setShowOnlyOpen] = useState(true);
 
   const serverSort: DrawSort = (() => {
-  switch (sortOption) {
-    case "latest":
-      return "LATEST";
-    case "deadline":
-      return "ENDING_SOON";
-    case "popular":
-      return "BOOKMARK";
-    case "participant":
-      return "PARTICIPANT";
-    default:
-      return "LATEST";
-  }
-})();
+    switch (sortOption) {
+      case "latest":
+        return "LATEST";
+      case "deadline":
+        return "ENDING_SOON";
+      case "popular":
+        return "BOOKMARK";
+      case "participant":
+        return "PARTICIPANT";
+      default:
+        return "LATEST";
+    }
+  })();
 
   const { data, isLoading, isError } = useDrawList({
     tab: "ALL",
@@ -114,7 +117,7 @@ export function DrawsListPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => navigate("/")}
               className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -200,95 +203,9 @@ export function DrawsListPage() {
 
         {filteredDraws.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredDraws.map((draw) => {
-              const open = isOpenDraw(draw.status, draw.startAt, draw.endAt);
-              const timeLeftText = getDrawTimeText(
-                draw.status,
-                draw.startAt,
-                draw.endAt
-              );
-              const { label, className } = getDrawStatusStyle(
-                draw.status,
-                draw.startAt,
-                draw.endAt
-              );
-
-              return (
-                <Link
-                  key={draw.drawId}
-                  to={`/draw/${draw.drawId}`}
-                  className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow group"
-                >
-                  <div className="relative">
-                    <img
-                      src={draw.imageUrl || "https://picsum.photos/600/400"}
-                      alt={draw.title}
-                      className={`w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300 ${
-                        !open ? "grayscale" : ""
-                      }`}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                      className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors"
-                    >
-                      <Heart
-                        className={`w-5 h-5 ${
-                          draw.isBookmarked
-                            ? "fill-red-500 text-red-500"
-                            : "text-gray-600"
-                        }`}
-                      />
-                    </button>
-
-                    <div className="absolute bottom-3 left-3">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${className}`}
-                      >
-                        {label}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-4">
-                    <h3 className="font-bold text-gray-900 mb-1 line-clamp-1">
-                      {draw.title}
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                      {draw.productName || "드로우 상품"}
-                    </p>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-1 text-gray-600">
-                          <Clock className="w-4 h-4" />
-                          <span>{timeLeftText}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-purple-600 font-medium">
-                          <Ticket className="w-4 h-4" />
-                          <span>{draw.ticketCostEntry}T</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200">
-                        <div className="flex items-center gap-1 text-gray-600">
-                          <Users className="w-4 h-4" />
-                          <span>{draw.participantCount}명 응모</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-red-600">
-                          <Heart className="w-4 h-4" />
-                          <span>{draw.bookmarkCount}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
+            {filteredDraws.map((draw) => (
+              <DrawListCardItem key={draw.drawId} draw={draw} />
+            ))}
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
@@ -301,5 +218,127 @@ export function DrawsListPage() {
         )}
       </main>
     </div>
+  );
+}
+
+function DrawListCardItem({ draw }: { draw: DrawCardResponse }) {
+  const { mutate: toggleBookmark, isPending } = useToggleDrawBookmark();
+
+  const open = isOpenDraw(draw.status, draw.startAt, draw.endAt);
+  const timeLeftText = getDrawTimeText(draw.status, draw.startAt, draw.endAt);
+  const { label, className } = getDrawStatusStyle(
+    draw.status,
+    draw.startAt,
+    draw.endAt
+  );
+
+  const handleBookmark = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (isPending) return;
+
+    const nextBookmarked = !draw.isBookmarked;
+
+    toggleBookmark(
+      {
+        drawId: draw.drawId,
+        nextBookmarked,
+      },
+      {
+        onSuccess: () => {
+          toast.success(nextBookmarked ? "북마크 추가" : "북마크 해제");
+        },
+        onError: (error) => {
+          console.error(error);
+
+          if (axios.isAxiosError(error) && error.response?.status === 401) {
+            toast.error("로그인이 필요한 서비스입니다.");
+            return;
+          }
+
+          toast.error("북마크 처리 실패");
+        },
+      }
+    );
+  };
+
+  return (
+    <Link
+      to={`/draws/${draw.drawId}`}
+      className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow group"
+    >
+      <div className="relative">
+        <img
+          src={draw.imageUrl || "https://picsum.photos/600/400"}
+          alt={draw.title}
+          className={`w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300 ${
+            !open ? "grayscale" : ""
+          }`}
+          onError={(e) => {
+            const target = e.currentTarget;
+            if (!target.src.includes("/placeholder.png")) {
+              target.src = "/placeholder.png";
+            }
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={handleBookmark}
+          disabled={isPending}
+          className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Heart
+            className={`w-5 h-5 ${
+              draw.isBookmarked ? "fill-red-500 text-red-500" : "text-gray-400"
+            }`}
+          />
+        </button>
+
+        <div className="absolute bottom-3 left-3">
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-medium ${className}`}
+          >
+            {label}
+          </span>
+        </div>
+      </div>
+
+      <div className="p-4">
+        <h3 className="font-bold text-gray-900 mb-1 line-clamp-1">
+          {draw.title}
+        </h3>
+        <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+          {draw.productName || "드로우 상품"}
+        </p>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-1 text-gray-600">
+              <Clock className="w-4 h-4" />
+              <span>{timeLeftText}</span>
+            </div>
+
+            <div className="flex items-center gap-1 text-purple-600 font-medium">
+              <Ticket className="w-4 h-4" />
+              <span>{draw.ticketCostEntry}T</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200">
+            <div className="flex items-center gap-1 text-gray-600">
+              <Users className="w-4 h-4" />
+              <span>{draw.participantCount}명 응모</span>
+            </div>
+
+            <div className="flex items-center gap-1 text-red-600">
+              <Heart className="w-4 h-4" />
+              <span>{draw.bookmarkCount}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Link>
   );
 }

@@ -15,6 +15,7 @@ export interface DrawCardResponse {
 }
 
 export interface DrawDetailResponse {
+  hostUserId: number;
   drawId: number;
   title: string;
   description: string;
@@ -34,6 +35,8 @@ export interface DrawDetailResponse {
   productDescription: string;
   price: number;
   images: string[];
+
+  endAtChanged: boolean;
 }
 
 export interface PageResponse<T> {

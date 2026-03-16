@@ -204,7 +204,7 @@ export function MyPage() {
               {likedDraws.length > 0 ? (
                 <div className="divide-y divide-gray-200">
                   {likedDraws.map((draw) => (
-                    <Link key={draw.id} to={`/draw/${draw.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
+                    <Link key={draw.id} to={`/draws/${draw.id}`} className="block p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex gap-4">
                         <img src={draw.image} alt={draw.title} className="w-20 h-20 object-cover rounded-lg" />
                         <div className="flex-1">
