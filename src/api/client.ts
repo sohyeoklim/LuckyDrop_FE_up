@@ -6,6 +6,17 @@ const apiClient = axios.create({
   withCredentials: true, // 쿠키 자동 포함 (refreshToken)
 });
 
+export interface UserDetailResDto {
+  id: number;
+  email?: string;
+  nickname?: string;
+}
+
+export const getMe = async () => {
+  const response = await apiClient.get<UserDetailResDto>("/api/user/me");
+  return response.data;
+};
+
 let isRefreshing = false;
 let refreshSubscribers: ((token: string) => void)[] = [];
 

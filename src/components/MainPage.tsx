@@ -1,71 +1,72 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { PlusCircle } from "lucide-react";
 import { TopAppBar } from "@/components/TopAppBar";
-import { HeroSection } from "@/components/HeroSection";
+import { HeroSection } from "@/components/draw/HeroSection";
 import { DrawCard } from "@/components/draw/DrawCard";
-import { getDraws } from "@/api/draw";
 import { useAuth } from "@/contexts/AuthContext";
-import type { DrawCardResponse } from "@/types/draw";
+import { useHotBanner } from "@/hooks/useHotBanner";
+import { useOngoingDraws } from "@/hooks/useOngoingDraws";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 
-const heroDrawData = {
-  id: 1,
-  title: "Apple Watch Ultra",
-  description: "최신 스마트워치의 끝판왕",
-  images: [
-    "https://images.unsplash.com/photo-1670177257750-9b47927f68eb?w=800",
-    "https://images.unsplash.com/photo-1699265837122-7636e128b4b0?w=800",
-  ],
-  ticketCost: 5,
-  timeLeft: "23:45:12",
-  liked: false,
-};
-
 export function MainPage() {
   const [userTickets] = useState(120);
-  const [ongoingDraws, setOngoingDraws] = useState<DrawCardResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
-  useEffect(() => {
-    const fetchDraws = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await getDraws({ tab: "ONGOING", page: 0, size: 6 });
-        setOngoingDraws(data.content);
-      } catch (err) {
-        console.error(err);
-        setError("드로우 목록을 불러오지 못했습니다.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDraws();
-  }, []);
+  const {
+    data: hotBanner,
+    isLoading: hotBannerLoading,
+    isError: isHotBannerError,
+  } = useHotBanner();
+
+  const {
+    data: ongoingData,
+    isLoading: ongoingLoading,
+    isError: isOngoingError,
+  } = useOngoingDraws();
+
+  const ongoingDraws = ongoingData?.content ?? [];
 
   return (
     <div className="min-h-screen bg-gray-50">
       <TopAppBar tickets={userTickets} />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <HeroSection draw={heroDrawData} userTickets={userTickets} />
+        {hotBannerLoading && (
+          <div className="rounded-2xl bg-white p-8 shadow-lg">
+            <p className="text-gray-500">핫 배너 불러오는 중...</p>
+          </div>
+        )}
+
+        {!hotBannerLoading && isHotBannerError && (
+          <div className="rounded-2xl bg-white p-8 shadow-lg">
+            <p className="text-red-500">핫 배너를 불러오지 못했습니다.</p>
+          </div>
+        )}
+
+        {!hotBannerLoading && !isHotBannerError && hotBanner && (
+          <HeroSection draw={hotBanner} userTickets={userTickets} />
+        )}
 
         <section className="mt-12">
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-900">진행 중인 드로우</h2>
-            <button className="text-sm font-medium text-purple-600 transition-colors hover:text-purple-700">
+            <Link
+              to="/draws"
+              className="text-sm font-medium text-purple-600 transition-colors hover:text-purple-700"
+            >
               전체보기 →
-            </button>
+            </Link>
           </div>
 
-          {loading && <p>불러오는 중...</p>}
-          {error && <p className="text-red-500">{error}</p>}
+          {ongoingLoading && <p>불러오는 중...</p>}
 
-          {!loading && !error && (
+          {!ongoingLoading && isOngoingError && (
+            <p className="text-red-500">메인 화면 데이터를 불러오지 못했습니다.</p>
+          )}
+
+          {!ongoingLoading && !isOngoingError && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {ongoingDraws.map((draw) => (
                 <DrawCard key={draw.drawId} draw={draw} />
@@ -83,14 +84,13 @@ export function MainPage() {
         </div>
       </footer>
 
-      {/* HOST 전용 FAB */}
-      {user?.role === 'HOST' && (
+      {user?.role === "HOST" && (
         <Link
           to="/draws/create"
-          className="fixed bottom-8 right-8 z-50 flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-5 py-3.5 rounded-full shadow-lg hover:from-purple-700 hover:to-pink-700 hover:shadow-xl transition-all duration-200 group"
+          className="fixed bottom-8 right-8 z-50 flex items-center gap-2 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-3.5 text-white shadow-lg transition-all duration-200 group hover:from-purple-700 hover:to-pink-700 hover:shadow-xl"
         >
           <PlusCircle className="w-5 h-5" />
-          <span className="text-sm font-semibold max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 whitespace-nowrap">
+          <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold transition-all duration-300 group-hover:max-w-xs">
             드로우 생성
           </span>
         </Link>

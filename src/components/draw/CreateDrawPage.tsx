@@ -1,18 +1,12 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Upload, X, Calendar, Ticket, Users, Package, DollarSign, Tag, Truck } from "lucide-react";
+import { ArrowLeft, Upload, X, Ticket, Package } from "lucide-react";
 import { useState, useRef, ChangeEvent } from "react";
 import axios from "axios";
-import type { DrawCreateRequest } from "../../types/draw";
-
-function toLocalDateTimeString(value: string) {
-  if (!value) return "";
-  return value.length === 16 ? `${value}:00` : value;
-}
 
 export function CreateDrawPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -27,78 +21,108 @@ export function CreateDrawPage() {
     shippable: true,
   });
 
-  const [imagePreview, setImagePreview] = useState<string>("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+
+    // 기존 이미지 유지하면서 뒤에 추가
+    setImageFiles((prev) => [...prev, ...files]);
+
+    const newPreviewPromises = files.map(
+      (file) =>
+        new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        })
+    );
+
+    Promise.all(newPreviewPromises).then((newPreviews) => {
+      setImagePreviews((prev) => [...prev, ...newPreviews]);
+    });
+
+    // 같은 파일 다시 선택 가능하게 초기화
+    e.target.value = "";
   };
 
-  const removeImage = () => {
-    setImagePreview("");
-    setImageFile(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+  const removeImage = (index: number) => {
+    setImageFiles((prev) => prev.filter((_, i) => i !== index));
+    setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  try {
-    const token = localStorage.getItem("accessToken");
-    console.log("token =", token);
+    try {
+      setSubmitting(true);
 
-    const requestBody = {
-      title: formData.title,
-      description: formData.description,
-      ticketCostEntry: Number(formData.ticketCostEntry),
-      winnerCount: Number(formData.winnerCount),
-      startAt: formData.startAt + ":00",
-      endAt: formData.endAt + ":00",
-      product: {
-        name: formData.productName,
-        brand: formData.brand,
-        description: formData.productDescription,
-        retailPrice: formData.retailPrice ? Number(formData.retailPrice) : 0,
-        shippable: formData.shippable,
-        images: [
+      let uploadedImageUrls: string[] = [];
+
+      if (imageFiles.length > 0) {
+        const imageFormData = new FormData();
+
+        imageFiles.forEach((file) => {
+          imageFormData.append("images", file);
+        });
+
+        const uploadResponse = await axios.post(
+          "http://localhost:8080/api/images",
+          imageFormData,
           {
-            imageUrl: "https://picsum.photos/800/600",
-            sortOrder: 0,
-          },
-        ],
-      },
-    };
+            withCredentials: true,
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          }
+        );
 
-    await axios.post(
-      "http://localhost:8080/api/draws/create",
-      requestBody,
-      {
+        uploadedImageUrls = uploadResponse.data.imageUrls;
+      }
+
+      const requestBody = {
+        title: formData.title,
+        description: formData.description,
+        ticketCostEntry: Number(formData.ticketCostEntry),
+        winnerCount: Number(formData.winnerCount),
+        startAt: formData.startAt + ":00",
+        endAt: formData.endAt + ":00",
+        product: {
+          name: formData.productName,
+          brand: formData.brand,
+          description: formData.productDescription,
+          retailPrice: formData.retailPrice ? Number(formData.retailPrice) : 0,
+          shippable: formData.shippable,
+          images: uploadedImageUrls.map((url, index) => ({
+            imageUrl: url,
+            sortOrder: index,
+          })),
+        },
+      };
+
+      await axios.post("http://localhost:8080/api/draws/create", requestBody, {
         withCredentials: true,
-        }
-    );
+      });
 
-    alert("드로우 생성 완료");
-    navigate("/draws");
-  } catch (error) {
-    console.error("드로우 생성 실패:", error);
-  }
-};
+      alert("드로우 생성 완료");
+      navigate("/draws");
+    } catch (error) {
+      console.error("드로우 생성 실패:", error);
+      alert("드로우 생성에 실패했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -106,7 +130,7 @@ export function CreateDrawPage() {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/draws")}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -117,9 +141,10 @@ export function CreateDrawPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page Title */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">새로운 드로우 생성</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            새로운 드로우 생성
+          </h1>
           <p className="text-gray-600">새로운 럭키드로우 이벤트를 만들어 보세요</p>
         </div>
 
@@ -130,47 +155,64 @@ export function CreateDrawPage() {
               <Upload className="w-5 h-5 text-purple-600" />
               <h2 className="text-xl font-bold text-gray-900">상품 이미지</h2>
             </div>
-            
+
             <div className="space-y-4">
-              {!imagePreview ? (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all duration-200"
-                >
-                  <Upload className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                  <p className="text-base font-medium text-gray-700 mb-1">
-                    클릭하여 이미지 선택
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    PNG, JPG, GIF (최대 5MB)
-                  </p>
-                </div>
-              ) : (
-                <div className="relative rounded-lg overflow-hidden group">
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    className="w-full h-80 object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                    <button
-                      type="button"
-                      onClick={removeImage}
-                      className="bg-white text-gray-900 rounded-lg px-4 py-2 font-medium hover:bg-gray-100 transition-colors flex items-center gap-2"
-                    >
-                      <X className="w-4 h-4" />
-                      이미지 삭제
-                    </button>
-                  </div>
-                </div>
-              )}
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all duration-200"
+              >
+                <Upload className="w-10 h-10 mx-auto mb-3 text-gray-400" />
+                <p className="text-base font-medium text-gray-700 mb-1">
+                  클릭하여 이미지 선택
+                </p>
+                <p className="text-sm text-gray-500">
+                  PNG, JPG, GIF / 여러 장 선택 가능
+                </p>
+              </div>
+
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                multiple
                 onChange={handleImageChange}
                 className="hidden"
               />
+
+              {imagePreviews.length > 0 && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-3">
+                    선택된 이미지 {imagePreviews.length}장
+                  </p>
+
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {imagePreviews.map((preview, index) => (
+                      <div
+                        key={`${preview}-${index}`}
+                        className="relative rounded-lg overflow-hidden border border-gray-200 group bg-gray-100"
+                      >
+                        <img
+                          src={preview}
+                          alt={`preview-${index}`}
+                          className="w-full h-48 object-cover"
+                        />
+
+                        <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                          {index === 0 ? "대표" : `${index + 1}번`}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute top-2 right-2 bg-white text-gray-900 rounded-full p-1 shadow hover:bg-gray-100"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -180,10 +222,13 @@ export function CreateDrawPage() {
               <Ticket className="w-5 h-5 text-purple-600" />
               <h2 className="text-xl font-bold text-gray-900">드로우 기본 정보</h2>
             </div>
-            
+
             <div className="space-y-5">
               <div>
-                <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="title"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   드로우 이름
                 </label>
                 <input
@@ -199,7 +244,10 @@ export function CreateDrawPage() {
               </div>
 
               <div>
-                <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="description"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   드로우 설명
                 </label>
                 <textarea
@@ -214,7 +262,10 @@ export function CreateDrawPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label htmlFor="winnerCount" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="winnerCount"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     당첨자 수
                   </label>
                   <input
@@ -231,7 +282,10 @@ export function CreateDrawPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="ticketCostEntry" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="ticketCostEntry"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     1회 응모 티켓 수
                   </label>
                   <input
@@ -250,7 +304,10 @@ export function CreateDrawPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label htmlFor="startAt" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="startAt"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     응모 시작 시간
                   </label>
                   <input
@@ -265,7 +322,10 @@ export function CreateDrawPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="endAt" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="endAt"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     응모 마감 시간
                   </label>
                   <input
@@ -288,11 +348,14 @@ export function CreateDrawPage() {
               <Package className="w-5 h-5 text-purple-600" />
               <h2 className="text-xl font-bold text-gray-900">상품 정보</h2>
             </div>
-            
+
             <div className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label htmlFor="productName" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="productName"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     상품명
                   </label>
                   <input
@@ -308,7 +371,10 @@ export function CreateDrawPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="brand" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="brand"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     브랜드
                   </label>
                   <input
@@ -325,7 +391,10 @@ export function CreateDrawPage() {
               </div>
 
               <div>
-                <label htmlFor="productDescription" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="productDescription"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   상품 설명
                 </label>
                 <textarea
@@ -340,7 +409,10 @@ export function CreateDrawPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label htmlFor="retailPrice" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="retailPrice"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     가격 (원)
                   </label>
                   <input
@@ -356,14 +428,22 @@ export function CreateDrawPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="shippable" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="shippable"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     배송 유형
                   </label>
                   <select
                     id="shippable"
                     name="shippable"
                     value={formData.shippable.toString()}
-                    onChange={(e) => setFormData(prev => ({ ...prev, shippable: e.target.value === "true" }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        shippable: e.target.value === "true",
+                      }))
+                    }
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white"
                   >
                     <option value="true">배송 상품</option>
@@ -378,16 +458,17 @@ export function CreateDrawPage() {
           <div className="flex gap-4">
             <button
               type="button"
-              onClick={() => navigate(-1)}
+              onClick={() => navigate("/draws")}
               className="flex-1 px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
             >
               취소
             </button>
             <button
               type="submit"
-              className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors shadow-sm"
+              disabled={submitting}
+              className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors shadow-sm disabled:bg-purple-300"
             >
-              드로우 생성하기
+              {submitting ? "생성 중..." : "드로우 생성하기"}
             </button>
           </div>
         </form>

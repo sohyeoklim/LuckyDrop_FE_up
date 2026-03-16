@@ -1,29 +1,60 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Heart, Clock, Users, Ticket } from "lucide-react";
+import toast from "react-hot-toast";
+import axios from "axios";
+
 import type { DrawCardResponse } from "../../types/draw";
 import { getDrawTimeText, getDrawStatusStyle } from "../../utils/draw";
+import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
 
 interface DrawCardProps {
   draw: DrawCardResponse;
 }
 
 export function DrawCard({ draw }: DrawCardProps) {
-  const [liked, setLiked] = useState(draw.isBookmarked);
+  const { mutate: toggleBookmark, isPending } = useToggleDrawBookmark();
 
-  const handleLike = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setLiked(!liked);
+  const handleLike = (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (isPending) return;
+
+  const nextBookmarked = !draw.isBookmarked;
+
+  toggleBookmark(
+    {
+      drawId: draw.drawId,
+      nextBookmarked,
+    },
+    {
+      onSuccess: () => {
+        toast.success(nextBookmarked ? "북마크 추가" : "북마크 해제");
+      },
+      onError: (error) => {
+        console.error(error);
+
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          toast.error("로그인이 필요한 서비스입니다.");
+          return;
+        }
+
+        toast.error("북마크 처리 실패");
+        },
+      }
+    );
   };
 
   const timeText = getDrawTimeText(draw.status, draw.startAt, draw.endAt);
-  const statusLabel = getDrawStatusStyle(draw.status);
-  const { label, className } = getDrawStatusStyle(draw.status);
+  const { label, className } = getDrawStatusStyle(
+    draw.status,
+    draw.startAt,
+    draw.endAt
+  );
 
   return (
     <Link
-      to={`/draw/${draw.drawId}`}
+      to={`/draws/${draw.drawId}`}
       className="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1 group block"
     >
       <div className="relative">
@@ -31,26 +62,28 @@ export function DrawCard({ draw }: DrawCardProps) {
           <img
             src={draw.imageUrl || "/placeholder.png"}
             alt={draw.title}
+            className="w-full h-full object-cover"
             onError={(e) => {
-            const target = e.currentTarget;
-            if (!target.src.includes("/placeholder.png")) {
-            target.src = "/placeholder.png";
+              const target = e.currentTarget;
+              if (!target.src.includes("/placeholder.png")) {
+                target.src = "/placeholder.png";
               }
             }}
           />
         </div>
 
         <button
+          type="button"
           onClick={handleLike}
-          className="absolute top-4 right-4 w-11 h-11 bg-white/95 rounded-full flex items-center justify-center shadow-md hover:scale-110 transition-transform"
+          disabled={isPending}
+          className="absolute top-4 right-4 w-11 h-11 bg-white/95 rounded-full flex items-center justify-center shadow-md hover:scale-110 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Heart
             className={`w-6 h-6 ${
-              liked ? "fill-red-500 text-red-500" : "text-gray-500"
+              draw.isBookmarked ? "fill-red-500 text-red-500" : "text-gray-500"
             }`}
           />
         </button>
-
 
         <div className="absolute bottom-4 left-4">
           <span className={`px-4 py-2 rounded-full text-sm font-medium ${className}`}>

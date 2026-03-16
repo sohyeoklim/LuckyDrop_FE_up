@@ -3,7 +3,7 @@ import { getDraws, type GetDrawCardParams } from "../api/draw";
 
 export const useDrawList = (params: GetDrawCardParams) => {
   return useQuery({
-    queryKey: ["drawList", params],
+    queryKey: ["draws", params],
     queryFn: () => getDraws(params),
   });
 };

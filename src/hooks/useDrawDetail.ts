@@ -4,7 +4,7 @@ import type { DrawDetailResponse } from '@/types/draw';
 
 export function useDrawDetail(drawId?: string) {
   return useQuery<DrawDetailResponse>({
-    queryKey: ['drawDetail', drawId],
+    queryKey: ['draw', String(drawId)],
     queryFn: () => getDrawDetail(drawId as string),
     enabled: !!drawId,
   });
