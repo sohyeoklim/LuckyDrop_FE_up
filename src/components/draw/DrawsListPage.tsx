@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
 import toast from "react-hot-toast";
@@ -16,7 +16,7 @@ import {
 import { useDrawList } from "@/hooks/useDrawList";
 import type { DrawSort } from "@/api/draw";
 import type { DrawCardResponse } from "@/types/draw";
-import { TopAppBar } from "@/components/TopAppBar";
+import { getImageUrl } from "@/utils/image";
 import {
   getDrawStatusStyle,
   getDrawTimeText,
@@ -271,10 +271,9 @@ function DrawListCardItem({ draw }: { draw: DrawCardResponse }) {
     >
       <div className="relative">
         <img
-          src={draw.imageUrl || "https://picsum.photos/600/400"}
+          src={getImageUrl(draw.imageUrl)}
           alt={draw.title}
-          className={`w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300 ${
-            !open ? "grayscale" : ""
+          className={`w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300 
           }`}
           onError={(e) => {
             const target = e.currentTarget;

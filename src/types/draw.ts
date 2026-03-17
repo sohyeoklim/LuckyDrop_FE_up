@@ -37,6 +37,9 @@ export interface DrawDetailResponse {
   images: string[];
 
   endAtChanged: boolean;
+
+  isEntered: boolean;
+  entryCount: number;
 }
 
 export interface PageResponse<T> {
