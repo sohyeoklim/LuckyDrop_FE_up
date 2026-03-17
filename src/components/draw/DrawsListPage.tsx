@@ -16,6 +16,7 @@ import {
 import { useDrawList } from "@/hooks/useDrawList";
 import type { DrawSort } from "@/api/draw";
 import type { DrawCardResponse } from "@/types/draw";
+import { TopAppBar } from "@/components/TopAppBar";
 import {
   getDrawStatusStyle,
   getDrawTimeText,
@@ -287,13 +288,16 @@ function DrawListCardItem({ draw }: { draw: DrawCardResponse }) {
           type="button"
           onClick={handleBookmark}
           disabled={isPending}
-          className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+          className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
           <Heart
-            className={`w-5 h-5 ${
-              draw.isBookmarked ? "fill-red-500 text-red-500" : "text-gray-400"
-            }`}
+            className={`w-4 h-4 ${
+            draw.isBookmarked ? "fill-red-500 text-red-500" : "text-gray-400"
+           }`}
           />
+          <span className="text-xs font-semibold text-gray-800">
+            {draw.bookmarkCount}
+          </span>
         </button>
 
         <div className="absolute bottom-3 left-3">
@@ -330,11 +334,6 @@ function DrawListCardItem({ draw }: { draw: DrawCardResponse }) {
             <div className="flex items-center gap-1 text-gray-600">
               <Users className="w-4 h-4" />
               <span>{draw.participantCount}명 응모</span>
-            </div>
-
-            <div className="flex items-center gap-1 text-red-600">
-              <Heart className="w-4 h-4" />
-              <span>{draw.bookmarkCount}</span>
             </div>
           </div>
         </div>

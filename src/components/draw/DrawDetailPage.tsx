@@ -255,13 +255,15 @@ export function DrawDetailPage() {
                 type="button"
                 onClick={handleLike}
                 disabled={isBookmarkPending}
-                className="absolute top-4 right-4 z-20 p-3 rounded-full bg-white/90 shadow-md hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+                className="absolute top-4 right-4 z-20 flex items-center gap-2 px-3 py-2 rounded-full bg-white/90 shadow-md hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 <Heart
-                  className={`w-6 h-6 transition-colors ${
-                    draw.isBookmarked ? "fill-red-500 text-red-500" : "text-gray-400"
+                  className={`w-5 h-5 transition-colors ${
+                  draw.isBookmarked ? "fill-red-500 text-red-500" : "text-gray-400"
                   }`}
                 />
+                <span className="text-sm font-semibold text-gray-800">
+                  {draw.bookmarkCount}
+                </span>
               </button>
 
               <Slider {...sliderSettings}>
@@ -308,19 +310,8 @@ export function DrawDetailPage() {
                 </p>
               </div>
             </div>
-
-            <div className="bg-white rounded-2xl shadow-lg p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-gray-700">
-                <Heart className="w-5 h-5 text-red-500" />
-                <span className="font-medium">북마크 수</span>
-              </div>
-              <span className="text-lg font-bold text-gray-900">
-                {draw.bookmarkCount}
-              </span>
-            </div>
           </div>
-
-                    <div className="space-y-6 pt-1">
+            <div className="space-y-6 pt-1">
             <div>
               <div className="flex items-start justify-between gap-4 mb-2">
                 <h1 className="text-3xl font-bold text-gray-900">{draw.title}</h1>
