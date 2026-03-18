@@ -1,13 +1,50 @@
 import { Ticket, Heart, User, Menu, LogOut, ListChecks } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useState, useEffect } from 'react';
+import apiClient from '../api/client';  // 기존 apiClient 직접 import
 
-interface TopAppBarProps {
-  tickets: number;
+interface TicketWallet {
+  balance: number;
 }
 
-export function TopAppBar({ tickets }: TopAppBarProps) {
+export function TopAppBar() {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [tickets, setTickets] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setTickets(0);
+      setLoading(false);
+      return;
+    }
+    
+    const fetchTickets = async () => {
+      try {
+        setLoading(true);
+        const response = await apiClient.get(`/api/ticket/wallet/${user.id}`);
+        setTickets(response.data.balance);
+      } catch (error) {
+        console.error('티켓 불러오기 실패:', error);
+        setTickets(0);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTickets();
+  }, [user?.id]);
+
+  const handleLogout =  async() => {
+    try {
+    logout(); // AuthContext의 logout 호출
+    navigate('/login'); // ✅ 로그인 페이지로 강제 이동
+    } catch (error) {
+    console.error('로그아웃 실패:', error);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
@@ -34,7 +71,9 @@ export function TopAppBar({ tickets }: TopAppBarProps) {
                     className="flex items-center gap-2 bg-gradient-to-r from-purple-100 to-pink-100 px-4 py-2 rounded-full hover:from-purple-200 hover:to-pink-200 transition-colors"
                   >
                     <Ticket className="w-5 h-5 text-purple-600" />
-                    <span className="font-bold text-purple-900">{tickets}</span>
+                    <span className="font-bold text-purple-900">
+                      {loading ? '...' : tickets}
+                    </span>
                   </Link>
 
                   {/* 미션 */}
@@ -87,7 +126,7 @@ export function TopAppBar({ tickets }: TopAppBarProps) {
                   {/* 로그아웃 */}
                   <div className="relative group">
                     <button
-                      onClick={logout}
+                      onClick={handleLogout}
                       className="p-2 hover:bg-gray-100 rounded-full transition-colors flex items-center justify-center"
                       aria-label="로그아웃"
                     >
