@@ -116,11 +116,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+  try {
+    // 백엔드 API 호출 (refreshToken 쿠키 제거 등)
+    await apiClient.post('/api/user/logout');  // 백엔드에서 만든 엔드포인트
+  } catch (error) {
+    console.warn('Logout API 실패. 클라이언트 상태만 정리:', error);
+    // API 실패해도 클라이언트는 무조건 정리
+  } finally {
+    // 클라이언트 상태 정리 (무조건 실행)
     setUser(null);
     localStorage.removeItem('userData');
     localStorage.removeItem('accessToken');
-  };
+    // 로그인 페이지로 리다이렉트 (필요시)
+    window.location.href = '/login';
+  }
+};
+
 
   return (
     <AuthContext.Provider value={{ user, login, logout, updateUser, fetchUserDetails, isLoading }}>

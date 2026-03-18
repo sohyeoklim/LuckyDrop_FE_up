@@ -1,18 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, TrendingUp, TrendingDown, Filter, Calendar, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  TrendingUp,
+  TrendingDown,
+  Filter,
+  Calendar,
+  Loader2,
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getTicketWallet, getTicketLedger } from '../api/client';
 import { format } from 'date-fns';
 
-type TicketType = '지급' | '사용' | '환불' | '충전';
+type TicketType = 'EARN' | 'USE' | 'REFUND' | 'ADJUST';
 
 interface LedgerEntry {
   id: string;
   type: TicketType;
-  amount: number;
+  amount: number; // 항상 양수 저장, 부호는 type으로 판단
   reason: string;
-  createdAt: string; // API는 ISO 8601 형식의 문자열을 반환
+  createdAt: string;
 }
 
 interface TicketTransaction extends LedgerEntry {
@@ -24,6 +31,28 @@ interface Wallet {
   totalEarned: number;
   totalSpent: number;
 }
+
+// 타입 -> 한글 라벨 매핑
+const typeLabelMap: Record<TicketType, string> = {
+  EARN: '지급',
+  USE: '사용',
+  REFUND: '환불',
+  ADJUST: '관리자 조정',
+};
+
+// 타입별 amount 부호 결정
+const getAmountSign = (type: TicketType): 1 | -1 => {
+  switch (type) {
+    case 'EARN':
+    case 'REFUND':
+      return 1;
+    case 'USE':
+    case 'ADJUST':
+      return -1;
+    default:
+      return 1;
+  }
+};
 
 export function MyTicketsPage() {
   const navigate = useNavigate();
@@ -51,17 +80,26 @@ export function MyTicketsPage() {
           getTicketWallet(user.id),
           getTicketLedger(user.id),
         ]);
+
         setWallet(walletData);
 
-        // 프론트엔드에서 balanceAfter 계산
+        // balanceAfter 계산: 최신 거래부터 거꾸로 계산
         let runningBalance = walletData.balance;
-        const transactionsWithBalance = ledgerData.map((tx) => {
-          const txWithBalance = { ...tx, balanceAfter: runningBalance };
-          runningBalance -= tx.amount;
-          return txWithBalance;
-        });
-        setTransactions(transactionsWithBalance);
+        const sortedLedger = [...ledgerData].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
 
+        const transactionsWithBalance: TicketTransaction[] = sortedLedger.map((tx) => {
+          const signedAmount = tx.amount * getAmountSign(tx.type);
+          const txWithBalance: TicketTransaction = {
+            ...tx,
+            balanceAfter: runningBalance,
+          };
+          runningBalance -= signedAmount; // 과거 거래 되돌리기
+          return txWithBalance;
+        }).reverse(); // 오래된 순으로 재정렬
+
+        setTransactions(transactionsWithBalance);
       } catch (err) {
         setError('데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.');
         console.error(err);
@@ -82,28 +120,39 @@ export function MyTicketsPage() {
   });
 
   const getTypeIcon = (type: TicketType) => {
-    const icons = {
-      지급: <TrendingUp className="w-5 h-5" />,
-      사용: <TrendingDown className="w-5 h-5" />,
-      환불: <TrendingUp className="w-5 h-5" />,
-      충전: <TrendingUp className="w-5 h-5" />,
+    const icons: Record<TicketType, JSX.Element> = {
+      EARN: <TrendingUp className="w-5 h-5" />,
+      USE: <TrendingDown className="w-5 h-5" />,
+      REFUND: <TrendingUp className="w-5 h-5" />,
+      ADJUST: <TrendingDown className="w-5 h-5" />,
     };
     return icons[type];
   };
 
   const getTypeColor = (type: TicketType) => {
-    const colors = {
-      지급: 'bg-green-100 text-green-600',
-      사용: 'bg-red-100 text-red-600',
-      환불: 'bg-blue-100 text-blue-600',
-      충전: 'bg-yellow-100 text-yellow-600',
+    const colors: Record<TicketType, string> = {
+      EARN: 'bg-green-100 text-green-600',
+      USE: 'bg-red-100 text-red-600',
+      REFUND: 'bg-blue-100 text-blue-600',
+      ADJUST: 'bg-amber-100 text-amber-600',
     };
     return colors[type];
   };
 
+  // 표시용 부호 결정 amount는 항상 양수라고 가정
+  const getDisplayAmount = (type: TicketType, amount: number): string => {
+    const sign = getAmountSign(type);
+    return `${sign === 1 ? '+' : ''}${amount}T`;
+  };
+
+  const getAmountColorClass = (type: TicketType): string => {
+    const sign = getAmountSign(type);
+    return sign === 1 ? 'text-green-600' : 'text-red-600';
+  };
+
   // 월 목록 생성
   const availableMonths = Array.from(
-    new Set(transactions.map((t) => format(new Date(t.createdAt), 'yyyy-MM')))
+    new Set(transactions.map((t) => format(new Date(t.createdAt), 'yyyy-MM'))),
   ).sort((a, b) => b.localeCompare(a));
 
   if (isLoading) {
@@ -167,7 +216,10 @@ export function MyTicketsPage() {
             <div>
               <p className="text-sm text-purple-100 mb-1">환불</p>
               <p className="text-xl font-bold">
-                +{transactions.filter(t => t.type === '환불').reduce((sum, t) => sum + t.amount, 0)}
+                +
+                {transactions
+                  .filter((t) => t.type === 'REFUND')
+                  .reduce((sum, t) => sum + t.amount, 0)}
               </p>
             </div>
           </div>
@@ -181,14 +233,14 @@ export function MyTicketsPage() {
               <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <select
                 value={filterType}
-                onChange={(e) => setFilterType(e.target.value as any)}
+                onChange={(e) => setFilterType(e.target.value as 'all' | TicketType)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 appearance-none bg-white"
               >
                 <option value="all">모든 유형</option>
-                <option value="지급">지급</option>
-                <option value="사용">사용</option>
-                <option value="환불">환불</option>
-                <option value="충전">충전</option>
+                <option value="EARN">지급</option>
+                <option value="USE">사용</option>
+                <option value="REFUND">환불</option>
+                <option value="ADJUST">관리자 조정</option>
               </select>
             </div>
 
@@ -216,37 +268,45 @@ export function MyTicketsPage() {
           {filteredTransactions.length > 0 ? (
             <div className="divide-y divide-gray-200">
               {filteredTransactions.map((transaction) => (
-                <div key={transaction.id} className="p-6 hover:bg-gray-50 transition-colors">
+                <div
+                  key={transaction.id}
+                  className="p-6 hover:bg-gray-50 transition-colors"
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-4">
                       <div
                         className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${getTypeColor(
-                          transaction.type
+                          transaction.type,
                         )}`}
                       >
                         {getTypeIcon(transaction.type)}
                       </div>
                       <div>
-                        <h3 className="font-medium text-gray-900 mb-1">{transaction.reason}</h3>
+                        <h3 className="font-medium text-gray-900 mb-1">
+                          {transaction.reason}
+                        </h3>
                         <div className="flex items-center gap-3 text-sm text-gray-600">
-                          <span>{format(new Date(transaction.createdAt), 'yyyy-MM-dd')}</span>
+                          <span>
+                            {format(new Date(transaction.createdAt), 'yyyy-MM-dd')}
+                          </span>
                           <span className="text-gray-400">•</span>
                           <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">
-                            {transaction.type}
+                            {typeLabelMap[transaction.type]}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="text-right">
                       <p
-                        className={`text-xl font-bold mb-1 ${
-                          transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
-                        }`}
+                        className={`text-xl font-bold mb-1 ${getAmountColorClass(
+                          transaction.type
+                        )}`}
                       >
-                        {transaction.amount > 0 ? '+' : ''}
-                        {transaction.amount}T
+                        {getDisplayAmount(transaction.type, transaction.amount)}
                       </p>
-                      <p className="text-sm text-gray-600">잔액: {transaction.balanceAfter}T</p>
+                      <p className="text-sm text-gray-600">
+                        잔액: {transaction.balanceAfter}T
+                      </p>
                     </div>
                   </div>
                 </div>
