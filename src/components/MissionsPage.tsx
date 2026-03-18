@@ -11,6 +11,8 @@ import {
   Flame,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+// import axios from 'axios';
+import apiClient from '@/api/client';
 
 interface Mission {
   id: number;
@@ -135,6 +137,7 @@ export function MissionsPage() {
     },
   ]);
 
+/*
   const handleClaimReward = (missionId: number) => {
     const mission = missions.find((m) => m.id === missionId);
     if (!mission || mission.completed) return;
@@ -146,6 +149,86 @@ export function MissionsPage() {
       prev.map((m) => (m.id === missionId ? { ...m, completed: true } : m))
     );
   };
+*/
+
+const handleClaimReward = async (missionId: number) => {
+  const mission = missions.find((m) => m.id === missionId);
+  if (!mission || mission.completed) return;
+
+  // 1) 출석 미션(id === 1) 백엔드 출석 API 호출
+  if (missionId === 1) {
+    try {
+//       const res = await axios.post('/api/missions/attendance/check-in');
+         const res = await apiClient.post('/api/missions/attendance/check-in');
+
+      const data = res.data as {
+        success: boolean;
+        alreadyCheckedIn: boolean;
+        message: string;
+        streak: number;
+        earnedTickets: number;
+        bonusTickets: number;
+        totalEarnedTickets: number;
+      };
+
+      if (!data.success) {
+        toast.error(data.message || '출석 체크에 실패했습니다.');
+        return;
+      }
+
+      if (data.alreadyCheckedIn) {
+        toast(data.message || '오늘의 출석체크는 완료되었습니다.');
+      } else {
+        // 새 출석 + 보너스 상황
+        toast.success(data.message || '출석 체크 완료!');
+
+        // TODO: userTickets, consecutiveDays를 실제 값으로 반영하고 싶으면 여기서 setState로 반영
+        // 예: setConsecutiveDays(data.streak);
+        // 예: setUserTickets((prev) => prev + data.totalEarnedTickets);
+      }
+
+      // 출석 미션은 항상 완료 처리
+      setMissions((prev) =>
+        prev.map((m) =>
+          m.id === missionId ? { ...m, completed: true } : m
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error('출석 체크 중 오류가 발생했습니다.');
+    }
+
+    return;
+  }
+
+  // 2) 광고 미션 백엔드 광고 API 호출
+  if (mission.type === 'ad') {
+    try {
+      await apiClient.post('/api/missions/ad/complete');
+
+      toast.success(`${mission.reward} 티켓을 받았습니다!`);
+
+      setMissions((prev) =>
+        prev.map((m) =>
+          m.id === missionId ? { ...m, completed: true } : m
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error('광고 미션 처리 중 오류가 발생했습니다.');
+    }
+
+    return;
+  }
+
+  // 2) 그 외 미션(id !== 1)은 기존처럼 로컬 처리
+  toast.success(`${mission.reward} 티켓을 받았습니다!`);
+
+  setMissions((prev) =>
+    prev.map((m) => (m.id === missionId ? { ...m, completed: true } : m))
+  );
+};
+
 
   const handleWatchAd = (missionId: number) => {
     // 실제로는 광고 SDK 실행
