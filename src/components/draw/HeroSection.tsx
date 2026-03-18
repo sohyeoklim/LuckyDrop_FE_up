@@ -50,6 +50,12 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
     arrows: false,
   };
 
+  const reasonTextMap: Record<string, string> = {
+    UPCOMING_BOOKMARK: "🔥 시작 전부터 기대 폭발 중 🔥",
+    ENDING_SOON: "⏰ 마감 임박! 마지막 기회! ⏰",
+    POPULAR: "🔥 지금 제일 핫한 드로우 🔥",
+  };
+
   const timeLeft = getTimeLeft(draw.endAt);
   const imageList =
     draw.images && draw.images.length > 0 ? draw.images : ["/placeholder.png"];
@@ -132,7 +138,9 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
           </div>
 
           {draw.reason && (
-            <p className="text-sm text-pink-500 font-medium mb-2">{draw.reason}</p>
+            <p className="text-sm text-pink-500 font-medium mb-2">
+            {reasonTextMap[draw.reason] ?? draw.reason}
+            </p>
           )}
 
           <p className="text-sm text-gray-500 mb-1">{draw.productName}</p>

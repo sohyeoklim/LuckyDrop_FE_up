@@ -13,13 +13,12 @@ import {
 import Slider from "react-slick";
 import toast from "react-hot-toast";
 
+import { getImageUrl } from "@/utils/image";
 import { useEntryDraw } from "@/hooks/useEntryDraw";
 import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
 import { useDrawDetail } from "@/hooks/useDrawDetail";
 import type { DrawStatus } from "@/types/draw";
 import { getMe } from "@/api/client";
-
-/* 유틸 함수들은 그대로 */
 
 function getStatusBadge(status: DrawStatus) {
   const badges = {
@@ -105,7 +104,6 @@ export function DrawDetailPage() {
     if (!drawId || !draw) return;
     if (isBookmarkPending) return;
 
-
     const nextBookmarked = !draw.isBookmarked;
 
     toggleBookmark(
@@ -169,7 +167,9 @@ export function DrawDetailPage() {
   const totalCost = draw.ticketCostEntry * entryCount;
   const remainingTickets = userTickets - totalCost;
   const timeLeftText = getTimeLeftText(draw.status, draw.endAt);
-  const imageList = draw.images?.length ? draw.images : ["/placeholder.png"];
+  const imageList = draw.images?.length
+    ? draw.images.map((img) => getImageUrl(img))
+    : ["/placeholder.png"];
 
   const handleEntry = () => {
     if (!draw || !drawId) return;
@@ -255,13 +255,16 @@ export function DrawDetailPage() {
                 type="button"
                 onClick={handleLike}
                 disabled={isBookmarkPending}
-                className="absolute top-4 right-4 z-20 p-3 rounded-full bg-white/90 shadow-md hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="absolute top-4 right-4 z-20 flex items-center gap-2 px-3 py-2 rounded-full bg-white/90 shadow-md hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Heart
-                  className={`w-6 h-6 transition-colors ${
+                  className={`w-5 h-5 transition-colors ${
                     draw.isBookmarked ? "fill-red-500 text-red-500" : "text-gray-400"
                   }`}
                 />
+                <span className="text-sm font-semibold text-gray-800">
+                  {draw.bookmarkCount}
+                </span>
               </button>
 
               <Slider {...sliderSettings}>
@@ -308,19 +311,9 @@ export function DrawDetailPage() {
                 </p>
               </div>
             </div>
-
-            <div className="bg-white rounded-2xl shadow-lg p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-gray-700">
-                <Heart className="w-5 h-5 text-red-500" />
-                <span className="font-medium">북마크 수</span>
-              </div>
-              <span className="text-lg font-bold text-gray-900">
-                {draw.bookmarkCount}
-              </span>
-            </div>
           </div>
 
-                    <div className="space-y-6 pt-1">
+          <div className="space-y-6 pt-1">
             <div>
               <div className="flex items-start justify-between gap-4 mb-2">
                 <h1 className="text-3xl font-bold text-gray-900">{draw.title}</h1>
@@ -360,6 +353,14 @@ export function DrawDetailPage() {
                     {draw.winnerCount}명
                   </span>
                 </div>
+
+                {draw.isEntered && (
+                  <div className="mb-4 rounded-xl bg-purple-50 border border-purple-100 px-4 py-3">
+                    <p className="text-sm text-purple-700 font-medium">
+                      현재 해당 드로우에 {draw.entryCount}회 응모
+                    </p>
+                  </div>
+                )}
 
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -429,6 +430,8 @@ export function DrawDetailPage() {
                 >
                   {userTickets < totalCost
                     ? "티켓이 부족합니다"
+                    : draw.isEntered
+                    ? `${entryCount}회 추가 응모하기`
                     : `${entryCount}회 응모하기`}
                 </button>
               </div>
@@ -471,23 +474,29 @@ export function DrawDetailPage() {
             </li>
             <li className="flex items-start gap-2 text-gray-600">
               <span className="text-purple-600 font-bold">•</span>
-              <span>응모 시작: {new Intl.DateTimeFormat("ko-KR", {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-              }).format(new Date(draw.startAt))}</span>
+              <span>
+                응모 시작:{" "}
+                {new Intl.DateTimeFormat("ko-KR", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date(draw.startAt))}
+              </span>
             </li>
             <li className="flex items-start gap-2 text-gray-600">
               <span className="text-purple-600 font-bold">•</span>
-              <span>응모 종료: {new Intl.DateTimeFormat("ko-KR", {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-              }).format(new Date(draw.endAt))}</span>
+              <span>
+                응모 종료:{" "}
+                {new Intl.DateTimeFormat("ko-KR", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date(draw.endAt))}
+              </span>
             </li>
           </ul>
         </div>

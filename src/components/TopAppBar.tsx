@@ -19,7 +19,7 @@ export function TopAppBar({ tickets }: TopAppBarProps) {
               <span className="text-white font-bold text-lg">L</span>
             </div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-              Luckydrop
+              LuckyDrop
             </h1>
           </Link>
 

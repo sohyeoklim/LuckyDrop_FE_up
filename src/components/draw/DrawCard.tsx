@@ -5,6 +5,7 @@ import axios from "axios";
 
 import type { DrawCardResponse } from "../../types/draw";
 import { getDrawTimeText, getDrawStatusStyle } from "../../utils/draw";
+import { getImageUrl } from "../../utils/image";
 import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
 
 interface DrawCardProps {
@@ -60,7 +61,7 @@ export function DrawCard({ draw }: DrawCardProps) {
       <div className="relative">
         <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
           <img
-            src={draw.imageUrl || "/placeholder.png"}
+            src={getImageUrl(draw.imageUrl)}
             alt={draw.title}
             className="w-full h-full object-cover"
             onError={(e) => {

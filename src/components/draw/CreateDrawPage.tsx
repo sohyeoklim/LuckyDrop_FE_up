@@ -24,12 +24,25 @@ export function CreateDrawPage() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const formatDateTimeLocal = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  const nowMin = formatDateTimeLocal(new Date());
+  const endMin = formData.startAt || nowMin;
+  
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
 
-    // 기존 이미지 유지하면서 뒤에 추가
     setImageFiles((prev) => [...prev, ...files]);
 
     const newPreviewPromises = files.map(
@@ -45,7 +58,12 @@ export function CreateDrawPage() {
       setImagePreviews((prev) => [...prev, ...newPreviews]);
     });
 
-    // 같은 파일 다시 선택 가능하게 초기화
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.images;
+      return next;
+    });
+
     e.target.value = "";
   };
 
@@ -55,14 +73,113 @@ export function CreateDrawPage() {
   };
 
   const handleInputChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+) => {
+  const { name, value } = e.target;
+
+  setFormData((prev) => {
+    const next = { ...prev, [name]: value };
+
+    if (name === "startAt") {
+      if (next.endAt && new Date(next.endAt) <= new Date(value)) {
+        next.endAt = "";
+      }
+    }
+
+    return next;
+  });
+
+  setErrors((prev) => {
+    const next = { ...prev };
+    delete next[name];
+
+    if (name === "startAt") {
+      delete next.endAt;
+    }
+
+    return next;
+  });
+};
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.title.trim()) {
+      newErrors.title = "드로우 이름을 입력해주세요.";
+    }
+
+    if (!formData.description.trim()) {
+      newErrors.description = "드로우 설명을 입력해주세요.";
+    }
+
+    if (!formData.winnerCount) {
+      newErrors.winnerCount = "당첨자 수를 입력해주세요.";
+    } else if (Number(formData.winnerCount) < 1) {
+      newErrors.winnerCount = "당첨자 수는 1명 이상이어야 합니다.";
+    }
+
+    if (!formData.ticketCostEntry) {
+      newErrors.ticketCostEntry = "1회 응모 티켓 수를 입력해주세요.";
+    } else if (Number(formData.ticketCostEntry) < 1) {
+      newErrors.ticketCostEntry = "필요 티켓 수는 1장 이상이어야 합니다.";
+    }
+
+    if (!formData.startAt) {
+      newErrors.startAt = "응모 시작 시간을 입력해주세요.";
+    }
+
+    if (!formData.endAt) {
+      newErrors.endAt = "응모 마감 시간을 입력해주세요.";
+    }
+
+    if (formData.startAt) {
+      const start = new Date(formData.startAt);
+      const now = new Date();
+      if (start <= now) {
+        newErrors.startAt = "응모 시작 시간은 현재 이후여야 합니다.";
+      }
+    }
+
+    if (formData.startAt && formData.endAt) {
+      const start = new Date(formData.startAt);
+      const end = new Date(formData.endAt);
+      if (end <= start) {
+        newErrors.endAt = "응모 종료 시간은 시작 시간보다 이후여야 합니다.";
+      }
+    }
+
+    if (!formData.productName.trim()) {
+      newErrors.productName = "상품명을 입력해주세요.";
+    }
+
+    if (!formData.brand.trim()) {
+      newErrors.brand = "브랜드명을 입력해주세요.";
+    }
+
+    if (!formData.productDescription.trim()) {
+      newErrors.productDescription = "상품 설명을 입력해주세요.";
+    }
+
+    if (formData.retailPrice === "") {
+      newErrors.retailPrice = "상품 가격을 입력해주세요.";
+    } else if (Number(formData.retailPrice) < 0) {
+      newErrors.retailPrice = "상품 가격은 0 이상이어야 합니다.";
+    }
+
+    if (imageFiles.length === 0) {
+      newErrors.images = "이미지를 1장 이상 등록해주세요.";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -101,7 +218,7 @@ export function CreateDrawPage() {
           name: formData.productName,
           brand: formData.brand,
           description: formData.productDescription,
-          retailPrice: formData.retailPrice ? Number(formData.retailPrice) : 0,
+          retailPrice: Number(formData.retailPrice),
           shippable: formData.shippable,
           images: uploadedImageUrls.map((url, index) => ({
             imageUrl: url,
@@ -118,6 +235,20 @@ export function CreateDrawPage() {
       navigate("/draws");
     } catch (error) {
       console.error("드로우 생성 실패:", error);
+
+      if (axios.isAxiosError(error)) {
+        const responseData = error.response?.data;
+
+        if (responseData?.errors) {
+          setErrors(responseData.errors);
+          alert(responseData.message || "입력값을 확인해주세요.");
+          return;
+        }
+
+        alert(responseData?.message || "드로우 생성에 실패했습니다.");
+        return;
+      }
+
       alert("드로우 생성에 실패했습니다.");
     } finally {
       setSubmitting(false);
@@ -126,7 +257,6 @@ export function CreateDrawPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button
@@ -139,7 +269,6 @@ export function CreateDrawPage() {
         </div>
       </div>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -149,7 +278,6 @@ export function CreateDrawPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Image Upload Section */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-2 mb-6">
               <Upload className="w-5 h-5 text-purple-600" />
@@ -159,7 +287,9 @@ export function CreateDrawPage() {
             <div className="space-y-4">
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all duration-200"
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all duration-200 ${
+                  errors.images ? "border-red-500" : "border-gray-300"
+                }`}
               >
                 <Upload className="w-10 h-10 mx-auto mb-3 text-gray-400" />
                 <p className="text-base font-medium text-gray-700 mb-1">
@@ -178,6 +308,10 @@ export function CreateDrawPage() {
                 onChange={handleImageChange}
                 className="hidden"
               />
+
+              {errors.images && (
+                <p className="mt-2 text-sm text-red-500">{errors.images}</p>
+              )}
 
               {imagePreviews.length > 0 && (
                 <div>
@@ -216,7 +350,6 @@ export function CreateDrawPage() {
             </div>
           </div>
 
-          {/* Draw Information */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-2 mb-6">
               <Ticket className="w-5 h-5 text-purple-600" />
@@ -237,10 +370,15 @@ export function CreateDrawPage() {
                   value={formData.title}
                   onChange={handleInputChange}
                   placeholder="예: 에어조던 1 레트로 하이 OG"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                    errors.title ? "border-red-500" : "border-gray-300"
+                  }`}
                   maxLength={120}
                   required
                 />
+                {errors.title && (
+                  <p className="mt-1 text-sm text-red-500">{errors.title}</p>
+                )}
               </div>
 
               <div>
@@ -256,8 +394,13 @@ export function CreateDrawPage() {
                   value={formData.description}
                   onChange={handleInputChange}
                   placeholder="드로우 이벤트에 대한 상세한 설명을 작성해주세요."
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all min-h-[120px] resize-none"
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all min-h-[120px] resize-none ${
+                    errors.description ? "border-red-500" : "border-gray-300"
+                  }`}
                 />
+                {errors.description && (
+                  <p className="mt-1 text-sm text-red-500">{errors.description}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -275,10 +418,15 @@ export function CreateDrawPage() {
                     value={formData.winnerCount}
                     onChange={handleInputChange}
                     placeholder="10"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                      errors.winnerCount ? "border-red-500" : "border-gray-300"
+                    }`}
                     min="1"
                     required
                   />
+                  {errors.winnerCount && (
+                    <p className="mt-1 text-sm text-red-500">{errors.winnerCount}</p>
+                  )}
                 </div>
 
                 <div>
@@ -295,10 +443,17 @@ export function CreateDrawPage() {
                     value={formData.ticketCostEntry}
                     onChange={handleInputChange}
                     placeholder="5"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                      errors.ticketCostEntry ? "border-red-500" : "border-gray-300"
+                    }`}
                     min="1"
                     required
                   />
+                  {errors.ticketCostEntry && (
+                    <p className="mt-1 text-sm text-red-500">
+                      {errors.ticketCostEntry}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -315,10 +470,16 @@ export function CreateDrawPage() {
                     name="startAt"
                     type="datetime-local"
                     value={formData.startAt}
+                    min={nowMin}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                      errors.startAt ? "border-red-500" : "border-gray-300"
+                    }`}
                     required
                   />
+                  {errors.startAt && (
+                    <p className="mt-1 text-sm text-red-500">{errors.startAt}</p>
+                  )}
                 </div>
 
                 <div>
@@ -333,16 +494,21 @@ export function CreateDrawPage() {
                     name="endAt"
                     type="datetime-local"
                     value={formData.endAt}
+                    min={endMin}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                      errors.endAt ? "border-red-500" : "border-gray-300"
+                    }`}
                     required
                   />
+                  {errors.endAt && (
+                    <p className="mt-1 text-sm text-red-500">{errors.endAt}</p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Product Information */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-2 mb-6">
               <Package className="w-5 h-5 text-purple-600" />
@@ -364,10 +530,15 @@ export function CreateDrawPage() {
                     value={formData.productName}
                     onChange={handleInputChange}
                     placeholder="예: Air Jordan 1 Retro High OG"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                      errors.productName ? "border-red-500" : "border-gray-300"
+                    }`}
                     maxLength={80}
                     required
                   />
+                  {errors.productName && (
+                    <p className="mt-1 text-sm text-red-500">{errors.productName}</p>
+                  )}
                 </div>
 
                 <div>
@@ -383,10 +554,15 @@ export function CreateDrawPage() {
                     value={formData.brand}
                     onChange={handleInputChange}
                     placeholder="예: Nike"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                      errors.brand ? "border-red-500" : "border-gray-300"
+                    }`}
                     maxLength={80}
                     required
                   />
+                  {errors.brand && (
+                    <p className="mt-1 text-sm text-red-500">{errors.brand}</p>
+                  )}
                 </div>
               </div>
 
@@ -403,8 +579,15 @@ export function CreateDrawPage() {
                   value={formData.productDescription}
                   onChange={handleInputChange}
                   placeholder="상품의 특징, 사양, 구성품 등을 자세히 설명해주세요."
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all min-h-[120px] resize-none"
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all min-h-[120px] resize-none ${
+                    errors.productDescription ? "border-red-500" : "border-gray-300"
+                  }`}
                 />
+                {errors.productDescription && (
+                  <p className="mt-1 text-sm text-red-500">
+                    {errors.productDescription}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -422,9 +605,14 @@ export function CreateDrawPage() {
                     value={formData.retailPrice}
                     onChange={handleInputChange}
                     placeholder="250000"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+                      errors.retailPrice ? "border-red-500" : "border-gray-300"
+                    }`}
                     min="0"
                   />
+                  {errors.retailPrice && (
+                    <p className="mt-1 text-sm text-red-500">{errors.retailPrice}</p>
+                  )}
                 </div>
 
                 <div>
@@ -438,12 +626,18 @@ export function CreateDrawPage() {
                     id="shippable"
                     name="shippable"
                     value={formData.shippable.toString()}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setFormData((prev) => ({
                         ...prev,
                         shippable: e.target.value === "true",
-                      }))
-                    }
+                      }));
+
+                      setErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.shippable;
+                        return next;
+                      });
+                    }}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white"
                   >
                     <option value="true">배송 상품</option>
@@ -454,7 +648,6 @@ export function CreateDrawPage() {
             </div>
           </div>
 
-          {/* Submit Button */}
           <div className="flex gap-4">
             <button
               type="button"
@@ -474,7 +667,6 @@ export function CreateDrawPage() {
         </form>
       </main>
 
-      {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center text-sm text-gray-600">
