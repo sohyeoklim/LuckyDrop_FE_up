@@ -16,6 +16,8 @@ export interface DrawCardResponse {
 
 export interface DrawDetailResponse {
   hostUserId: number;
+  hostNickname?: string;
+  
   drawId: number;
   title: string;
   description: string;

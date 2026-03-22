@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import Slider from "react-slick";
 import { Heart, Clock, Ticket } from "lucide-react";
 import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
+import { getImageUrl } from "@/utils/image";
 import toast from "react-hot-toast";
 import axios from "axios";
 
@@ -58,7 +59,9 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
 
   const timeLeft = getTimeLeft(draw.endAt);
   const imageList =
-    draw.images && draw.images.length > 0 ? draw.images : ["/placeholder.png"];
+  draw.images && draw.images.length > 0
+    ? draw.images.map((img) => getImageUrl(img))
+    : ["/placeholder.png"];
 
   const handleLike = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
