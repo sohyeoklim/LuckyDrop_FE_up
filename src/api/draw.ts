@@ -1,5 +1,5 @@
 import { api } from "@/lib/axios";
-import type { DrawCardResponse, PageResponse, DrawDetailResponse } from "@/types/draw";
+import type { DrawCardResponse, PageResponse, DrawDetailResponse, DrawWinnerResponse  } from "@/types/draw";
 
 export type DrawTab = "ALL" | "UPCOMING" | "ONGOING" | "CLOSED";
 export type DrawSort =
@@ -27,6 +27,11 @@ export interface GetDrawCardParams {
   sort?: DrawSort;
   page?: number;
   size?: number;
+}
+
+export async function getDrawWinners(drawId: number): Promise<DrawWinnerResponse> {
+  const response = await api.get(`/api/draws/${drawId}/winners`);
+  return response.data;
 }
 
 export async function getDraws(params: GetDrawCardParams) {

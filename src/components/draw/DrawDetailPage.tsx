@@ -17,6 +17,7 @@ import { getImageUrl } from "@/utils/image";
 import { useEntryDraw } from "@/hooks/useEntryDraw";
 import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
 import { useDrawDetail } from "@/hooks/useDrawDetail";
+import { useDrawWinners } from "@/hooks/useDrawWinners";
 import type { DrawStatus } from "@/types/draw";
 import apiClient, { getMe } from "@/api/client";
 
@@ -67,8 +68,13 @@ export function DrawDetailPage() {
   const [entryCount, setEntryCount] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [meLoaded, setMeLoaded] = useState(false);
+  const [showWinnerModal, setShowWinnerModal] = useState(false);
 
   const { data: draw, isLoading, isError } = useDrawDetail(drawId);
+  const { data: winnerData, isLoading: winnersLoading } = useDrawWinners(
+  Number(drawId),
+  draw?.status === "CLOSE" && showWinnerModal
+  );
   const { mutate: entry } = useEntryDraw();
   const { mutate: toggleBookmark, isPending: isBookmarkPending } =
     useToggleDrawBookmark();
@@ -503,21 +509,31 @@ export function DrawDetailPage() {
 
           {draw.status !== "ACTIVE" && (
             <div className="bg-gray-50 rounded-2xl p-6 text-center">
-              <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 break-words [overflow-wrap:anywhere]">
-                {draw.status === "DRAFT" && "아직 응모 시작 전입니다."}
-                {draw.status === "DRAWING" && "추첨이 진행 중입니다."}
-                {draw.status === "CLOSE" && "드로우가 종료되었습니다."}
-                {draw.status === "CANCEL" &&
-                  "드로우가 취소되었습니다. 티켓이 환불됩니다."}
-              </p>
-            </div>
+            <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+
+            <p className="text-gray-600 break-words [overflow-wrap:anywhere]">
+              {draw.status === "DRAFT" && "아직 응모 시작 전입니다."}
+              {draw.status === "DRAWING" && "추첨이 진행 중입니다."}
+              {draw.status === "CLOSE" && "드로우가 종료되었습니다."}
+             {draw.status === "CANCEL" && "드로우가 취소되었습니다. 티켓이 환불됩니다."}
+            </p>
+
+          {draw.status === "CLOSE" && (
+            <button
+              onClick={() => setShowWinnerModal(true)}
+              className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700"
+            >
+              당첨자 목록 확인하기
+            </button>
           )}
+        </div>
+      )}
         </div>
       </div>
 
       <div className="mt-8 bg-white rounded-2xl shadow-lg p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">상품</h2>
+        
         <p className="text-gray-600 leading-relaxed mb-6 break-words [overflow-wrap:anywhere]">
           {draw.productDescription}
         </p>
@@ -595,6 +611,53 @@ export function DrawDetailPage() {
           )}
         </div>
       )}   
+
+      {showWinnerModal && (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+    <div className="w-full max-w-md bg-white rounded-2xl shadow-xl">
+
+      <div className="flex justify-between items-center px-5 py-4 border-b">
+        <h3 className="text-lg font-bold">당첨자 목록</h3>
+        <button onClick={() => setShowWinnerModal(false)}>닫기</button>
+      </div>
+
+      <div className="max-h-[400px] overflow-y-auto px-5 py-4">
+        {winnersLoading ? (
+          <p className="text-gray-500 text-sm">불러오는 중...</p>
+        ) : winnerData?.winners?.length ? (
+          <ul className="space-y-3">
+            {winnerData.winners.map((w, i) => (
+              <li
+                key={i}
+                className="flex justify-between border p-3 rounded-lg"
+              >
+                <span>{w.nickname}</span>
+                <span>{w.usedTicketCount}T</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-500 text-sm">
+            당첨자가 없습니다.
+          </p>
+        )}
+      </div>
+
+      <div className="p-4 border-t">
+        <button
+          onClick={() => setShowWinnerModal(false)}
+          className="w-full bg-gray-100 py-2 rounded-lg"
+        >
+          확인
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+
+
+      
     </main>
   </div>
   );

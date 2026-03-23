@@ -44,6 +44,16 @@ export interface DrawDetailResponse {
   entryCount: number;
 }
 
+export type DrawWinnerItem = {
+  nickname: string;
+  usedTicketCount: number;
+};
+
+export type DrawWinnerResponse = {
+  drawId: number;
+  winners: DrawWinnerItem[];
+};
+
 export interface PageResponse<T> {
   content: T[];
   totalPages: number;
