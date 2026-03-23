@@ -14,6 +14,7 @@ import { MyTicketsPage } from '@/components/MyTicketsPage';
 import { DrawsListPage } from '@/components/draw/DrawsListPage';
 import { CreateDrawPage } from '@/components/draw/CreateDrawPage';
 import { EditDrawPage } from '@/components/draw/EditDrawPage';
+import { AdminPage } from '@/components/AdminPage';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 import { AuthProvider } from './contexts/AuthContext';
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/my/liked" element={<MyLikedPage />} />
           <Route path="/my/tickets" element={<MyTicketsPage />} />
           <Route path="/missions" element={<MissionsPage />} />
+          <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

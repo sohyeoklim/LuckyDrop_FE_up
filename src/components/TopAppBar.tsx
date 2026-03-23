@@ -1,4 +1,4 @@
-import { Ticket, Heart, User, Menu, LogOut, ListChecks } from 'lucide-react';
+import { Ticket, Heart, User, Menu, LogOut, ListChecks, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useState, useEffect } from 'react';
@@ -65,6 +65,23 @@ export function TopAppBar() {
             <div className="hidden md:flex items-center gap-3">
               {user ? (
                 <>
+                  {/* 관리자 전용 */}
+                  {user.role === 'ADMIN' && (
+                    <div className="relative group">
+                      <Link
+                        to="/admin"
+                        className="p-2 hover:bg-purple-50 rounded-full transition-colors flex items-center justify-center border border-purple-100"
+                        aria-label="관리자 대시보드"
+                      >
+                        <ShieldCheck className="w-5 h-5 text-purple-600 group-hover:text-purple-700 transition-colors" />
+                      </Link>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-purple-600 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                        관리자
+                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-purple-600 rotate-45" />
+                      </div>
+                    </div>
+                  )}
+
                   {/* 티켓 */}
                   <Link
                     to="/my/tickets"
