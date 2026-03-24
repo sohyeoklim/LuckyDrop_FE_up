@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   Users, 
   Ticket, 
@@ -28,6 +43,11 @@ import { TopAppBar } from './TopAppBar';
 import apiClient from '../api/client';
 import { adjustTicket } from '../api/ticket';
 import { toast } from 'react-hot-toast';
+import type { AdminDrawSummaryResponse } from "@/types/admin";
+import {
+  getAdminForceCancelDraws,
+  forceCancelDraw,
+} from "@/api/admin";
 
 // --- Sub-components for Admin Page ---
 
@@ -339,77 +359,229 @@ const UserManagement = () => {
   );
 };
 
-const DrawManagement = () => {
-  const [draws, setDraws] = useState<any[]>([]);
+export const DrawManagement = () => {
+  const CANCEL_REASON_OPTIONS = [
+    { value: "ADMIN_FORCE_CANCEL", label: "관리자 판단" },
+    { value: "POLICY_VIOLATION", label: "정책 위반" },
+    { value: "FRAUD_SUSPECTED", label: "부정 행위 의심" },
+  ];
+
+  const [draws, setDraws] = useState<AdminDrawSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submittingId, setSubmittingId] = useState<number | null>(null);
+  const [open, setOpen] = useState(false);
+  const [selectedDrawId, setSelectedDrawId] = useState<number | null>(null);
+  const [reasonCode, setReasonCode] = useState("ADMIN_FORCE_CANCEL");
+  const [reasonDetail, setReasonDetail] = useState("");
 
-  useEffect(() => {
-    // Fetch draws - Mock for now
-    const mockDraws = [
-      { id: 101, title: '에어팟 프로 2세대', host: '박지성', status: 'ACTIVE', participants: 45 },
-      { id: 102, title: '스타벅스 3만원권', host: '카페베네', status: 'ACTIVE', participants: 120 },
-      { id: 103, title: '플레이스테이션 5', host: '소니코리아', status: 'DRAWING', participants: 850 },
-      { id: 104, title: '나이키 조던 1 하이', host: '슈즈콜렉터', status: 'ACTIVE', participants: 310 },
-    ];
-    setDraws(mockDraws);
-    setLoading(false);
-  }, []);
-
-  const handleCancelDraw = async (drawId: number) => {
-    if (!confirm('정말로 이 드로우를 강제 취소하시겠습니까? 참여자들에게 알림이 전송됩니다.')) return;
-    
+  /** ===== 목록 조회 ===== */
+  const fetchDraws = async () => {
     try {
-      // await apiClient.post(`/api/admin/draws/${drawId}/cancel`);
-      toast.success('드로우가 성공적으로 취소되었습니다.');
-      setDraws(draws.map(d => d.id === drawId ? { ...d, status: 'CANCEL' } : d));
+      setLoading(true);
+      const data = await getAdminForceCancelDraws();
+      setDraws(data);
     } catch (error) {
-      toast.error('드로우 취소에 실패했습니다.');
+      console.error(error);
+      toast.error("드로우 목록 조회 실패");
+    } finally {
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchDraws();
+  }, []);
+
+  /** ===== 강제 취소 ===== */
+  const handleCancelDraw = async () => {
+  if (!selectedDrawId) return;
+
+  if (!reasonDetail.trim()) {
+    toast.error("상세 사유를 입력해주세요");
+    return;
+  }
+
+  try {
+    setSubmittingId(selectedDrawId);
+
+    await forceCancelDraw(selectedDrawId, {
+      reasonCode,
+      reasonDetail,
+    });
+
+    toast.success("강제 취소 완료");
+    setOpen(false);
+    setSelectedDrawId(null);
+    setReasonCode("ADMIN_FORCE_CANCEL");
+    setReasonDetail("");
+    await fetchDraws();
+  } catch (error) {
+    console.error(error);
+    toast.error("강제 취소 실패");
+  } finally {
+    setSubmittingId(null);
+  }
+};
+
+  /** ===== 상태 UI ===== */
+  const getStatusLabel = (status: AdminDrawSummaryResponse["status"]) => {
+    switch (status) {
+      case "DRAFT":
+        return "대기";
+      case "ACTIVE":
+        return "진행중";
+      case "DRAWING":
+        return "추첨중";
+      case "CLOSE":
+        return "종료";
+      case "CANCEL":
+        return "취소";
+      default:
+        return status;
+    }
+  };
+
+  const getStatusBadgeVariant = (
+    status: AdminDrawSummaryResponse["status"]
+  ): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status) {
+      case "ACTIVE":
+        return "default";
+      case "DRAWING":
+        return "secondary";
+      case "CLOSE":
+        return "outline";
+      case "CANCEL":
+        return "destructive";
+      default:
+        return "outline";
+    }
+  };
+
+  /** ===== UI ===== */
   return (
     <Card>
       <CardHeader>
         <CardTitle>드로우 운영 관리</CardTitle>
-        <CardDescription>부적절하거나 문제가 있는 드로우를 강제 중단할 수 있습니다.</CardDescription>
+        <CardDescription>
+          문제가 있는 드로우를 강제 취소할 수 있습니다.
+        </CardDescription>
       </CardHeader>
+
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>제목</TableHead>
-              <TableHead>호스트</TableHead>
-              <TableHead>상태</TableHead>
-              <TableHead>참여자</TableHead>
-              <TableHead className="text-right">액션</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {draws.map((draw) => (
-              <TableRow key={draw.id}>
-                <TableCell className="font-medium">{draw.title}</TableCell>
-                <TableCell>{draw.host}</TableCell>
-                <TableCell>
-                  <Badge variant={draw.status === 'CANCEL' ? 'destructive' : 'outline'}>
-                    {draw.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>{draw.participants}명</TableCell>
-                <TableCell className="text-right">
-                  {draw.status !== 'CANCEL' && (
-                    <Button 
-                      variant="destructive" 
-                      size="sm"
-                      onClick={() => handleCancelDraw(draw.id)}
-                    >
-                      <Ban className="w-4 h-4 mr-1" /> 강제 취소
-                    </Button>
-                  )}
-                </TableCell>
+        {loading ? (
+          <div className="py-10 text-center text-gray-500">
+            로딩중...
+          </div>
+        ) : draws.length === 0 ? (
+          <div className="py-10 text-center text-gray-500">
+            드로우 없음
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>제목</TableHead>
+                <TableHead>호스트</TableHead>
+                <TableHead>상태</TableHead>
+                <TableHead>참여자</TableHead>
+                <TableHead className="text-right">액션</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+
+            <TableBody>
+              {draws.map((draw) => (
+                <TableRow key={draw.drawId}>
+                  <TableCell>{draw.title}</TableCell>
+                  <TableCell>{draw.hostNickname}</TableCell>
+                  <TableCell>
+                    <Badge variant={getStatusBadgeVariant(draw.status)}>
+                      {getStatusLabel(draw.status)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{draw.participantCount}명</TableCell>
+
+                  <TableCell className="text-right">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled={submittingId === draw.drawId}
+                      onClick={() => {
+                        setSelectedDrawId(draw.drawId);
+                        setOpen(true);
+                      }}
+                    >
+                      <Ban className="w-4 h-4 mr-1" />
+                      {submittingId === draw.drawId
+                        ? "처리중..."
+                        : "강제 취소"}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>드로우 강제 취소</DialogTitle>
+            <DialogDescription>
+               취소 사유 코드와 상세 사유를 입력한 뒤 강제 취소를 진행해.
+            </DialogDescription>
+          </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">취소 사유 코드</label>
+              <Select value={reasonCode} onValueChange={setReasonCode}>
+                <SelectTrigger>
+                  <SelectValue placeholder="사유 선택" />
+                </SelectTrigger>
+              <SelectContent>
+                {CANCEL_REASON_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">상세 사유</label>
+              <Textarea
+                value={reasonDetail}
+                onChange={(e) => setReasonDetail(e.target.value)}
+                placeholder="상세 사유를 입력하세요."
+                rows={4}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+              setOpen(false);
+              setSelectedDrawId(null);
+              setReasonCode("ADMIN_FORCE_CANCEL");
+              setReasonDetail("");
+              }}
+              >
+              취소
+            </Button>
+
+      <Button
+        variant="destructive"
+        onClick={handleCancelDraw}
+        disabled={!selectedDrawId || submittingId === selectedDrawId}
+      >
+        {submittingId === selectedDrawId ? "처리중..." : "강제 취소"}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
       </CardContent>
     </Card>
   );

@@ -1,6 +1,14 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Upload, X, Ticket, Package } from "lucide-react";
+import {
+  ArrowLeft,
+  Upload,
+  X,
+  Ticket,
+  Package,
+  AlertTriangle,
+} from "lucide-react";
 import { useState, useRef, ChangeEvent } from "react";
+import toast, { Toaster } from "react-hot-toast";
 import axios from "axios";
 
 export function CreateDrawPage() {
@@ -26,6 +34,9 @@ export function CreateDrawPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmChecked, setConfirmChecked] = useState(false);
+
   const formatDateTimeLocal = (date: Date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -38,7 +49,7 @@ export function CreateDrawPage() {
 
   const nowMin = formatDateTimeLocal(new Date());
   const endMin = formData.startAt || nowMin;
-  
+
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
@@ -73,33 +84,33 @@ export function CreateDrawPage() {
   };
 
   const handleInputChange = (
-  e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-) => {
-  const { name, value } = e.target;
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
 
-  setFormData((prev) => {
-    const next = { ...prev, [name]: value };
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
 
-    if (name === "startAt") {
-      if (next.endAt && new Date(next.endAt) <= new Date(value)) {
-        next.endAt = "";
+      if (name === "startAt") {
+        if (next.endAt && new Date(next.endAt) <= new Date(value)) {
+          next.endAt = "";
+        }
       }
-    }
 
-    return next;
-  });
+      return next;
+    });
 
-  setErrors((prev) => {
-    const next = { ...prev };
-    delete next[name];
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[name];
 
-    if (name === "startAt") {
-      delete next.endAt;
-    }
+      if (name === "startAt") {
+        delete next.endAt;
+      }
 
-    return next;
-  });
-};
+      return next;
+    });
+  };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -174,13 +185,7 @@ export function CreateDrawPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
+  const submitDraw = async () => {
     try {
       setSubmitting(true);
 
@@ -231,7 +236,9 @@ export function CreateDrawPage() {
         withCredentials: true,
       });
 
-      alert("드로우 생성 완료");
+      toast.success("드로우 생성 완료");
+      setShowConfirmModal(false);
+      setConfirmChecked(false);
       navigate("/draws");
     } catch (error) {
       console.error("드로우 생성 실패:", error);
@@ -241,18 +248,37 @@ export function CreateDrawPage() {
 
         if (responseData?.errors) {
           setErrors(responseData.errors);
-          alert(responseData.message || "입력값을 확인해주세요.");
+          toast.error(responseData.message || "입력값을 확인해주세요.");
           return;
         }
 
-        alert(responseData?.message || "드로우 생성에 실패했습니다.");
+        toast.error(responseData?.message || "드로우 생성에 실패했습니다.");
         return;
       }
 
-      alert("드로우 생성에 실패했습니다.");
+      toast.error("드로우 생성에 실패했습니다.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setConfirmChecked(false);
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmCreate = async () => {
+    if (!confirmChecked || submitting) {
+      return;
+    }
+
+    await submitDraw();
   };
 
   return (
@@ -274,7 +300,9 @@ export function CreateDrawPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             새로운 드로우 생성
           </h1>
-          <p className="text-gray-600">새로운 럭키드로우 이벤트를 만들어 보세요</p>
+          <p className="text-gray-600">
+            새로운 럭키드로우 이벤트를 만들어 보세요
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -353,7 +381,9 @@ export function CreateDrawPage() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-2 mb-6">
               <Ticket className="w-5 h-5 text-purple-600" />
-              <h2 className="text-xl font-bold text-gray-900">드로우 기본 정보</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                드로우 기본 정보
+              </h2>
             </div>
 
             <div className="space-y-5">
@@ -399,7 +429,9 @@ export function CreateDrawPage() {
                   }`}
                 />
                 {errors.description && (
-                  <p className="mt-1 text-sm text-red-500">{errors.description}</p>
+                  <p className="mt-1 text-sm text-red-500">
+                    {errors.description}
+                  </p>
                 )}
               </div>
 
@@ -425,7 +457,9 @@ export function CreateDrawPage() {
                     required
                   />
                   {errors.winnerCount && (
-                    <p className="mt-1 text-sm text-red-500">{errors.winnerCount}</p>
+                    <p className="mt-1 text-sm text-red-500">
+                      {errors.winnerCount}
+                    </p>
                   )}
                 </div>
 
@@ -444,7 +478,9 @@ export function CreateDrawPage() {
                     onChange={handleInputChange}
                     placeholder="5"
                     className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
-                      errors.ticketCostEntry ? "border-red-500" : "border-gray-300"
+                      errors.ticketCostEntry
+                        ? "border-red-500"
+                        : "border-gray-300"
                     }`}
                     min="1"
                     required
@@ -537,7 +573,9 @@ export function CreateDrawPage() {
                     required
                   />
                   {errors.productName && (
-                    <p className="mt-1 text-sm text-red-500">{errors.productName}</p>
+                    <p className="mt-1 text-sm text-red-500">
+                      {errors.productName}
+                    </p>
                   )}
                 </div>
 
@@ -580,7 +618,9 @@ export function CreateDrawPage() {
                   onChange={handleInputChange}
                   placeholder="상품의 특징, 사양, 구성품 등을 자세히 설명해주세요."
                   className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all min-h-[120px] resize-none ${
-                    errors.productDescription ? "border-red-500" : "border-gray-300"
+                    errors.productDescription
+                      ? "border-red-500"
+                      : "border-gray-300"
                   }`}
                 />
                 {errors.productDescription && (
@@ -606,12 +646,16 @@ export function CreateDrawPage() {
                     onChange={handleInputChange}
                     placeholder="250000"
                     className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
-                      errors.retailPrice ? "border-red-500" : "border-gray-300"
+                      errors.retailPrice
+                        ? "border-red-500"
+                        : "border-gray-300"
                     }`}
                     min="0"
                   />
                   {errors.retailPrice && (
-                    <p className="mt-1 text-sm text-red-500">{errors.retailPrice}</p>
+                    <p className="mt-1 text-sm text-red-500">
+                      {errors.retailPrice}
+                    </p>
                   )}
                 </div>
 
@@ -666,6 +710,81 @@ export function CreateDrawPage() {
           </div>
         </form>
       </main>
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-gray-100 px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-amber-100 p-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    드로우 생성 전 확인
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    생성 이후 수정 가능한 항목이 제한됩니다.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-semibold text-amber-900">
+                  생성 후 수정 가능한 항목
+                </p>
+                <ul className="mt-2 space-y-1 text-sm text-amber-800">
+                  <li>• 드로우 설명</li>
+                  <li>• 종료시간 1회 연장</li>
+                </ul>
+                <p className="mt-3 text-sm text-amber-800 leading-6">
+                  그 외 항목인 상품 정보, 시작시간, 1회 응모 티켓 수, 당첨자 수
+                  등은 수정할 수 없습니다.
+                  또한 응모 시작 전 그리고 시작이 되더라도 응모자가 발생하지 않은
+                  드로우만 취소가 가능합니다.
+                </p>
+              </div>
+
+              <label className="mt-5 flex items-start gap-3 rounded-xl border border-gray-200 p-4 cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={confirmChecked}
+                  onChange={(e) => setConfirmChecked(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                />
+                <span className="text-sm text-gray-700 leading-6">
+                  위 내용을 확인했고, 생성 후 수정 제한 사항, 삭제사항에 동의합니다.
+                </span>
+              </label>
+            </div>
+
+            <div className="flex gap-3 border-t border-gray-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  if (submitting) return;
+                  setShowConfirmModal(false);
+                  setConfirmChecked(false);
+                }}
+                className="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                취소
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmCreate}
+                disabled={!confirmChecked || submitting}
+                className="flex-1 rounded-xl bg-purple-600 px-4 py-3 text-sm font-medium text-white hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed"
+              >
+                {submitting ? "생성 중..." : "확인 후 생성"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="bg-white border-t border-gray-200 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

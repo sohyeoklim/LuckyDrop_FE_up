@@ -16,6 +16,8 @@ export interface DrawCardResponse {
 
 export interface DrawDetailResponse {
   hostUserId: number;
+  hostNickname?: string;
+  
   drawId: number;
   title: string;
   description: string;
@@ -41,6 +43,16 @@ export interface DrawDetailResponse {
   isEntered: boolean;
   entryCount: number;
 }
+
+export type DrawWinnerItem = {
+  nickname: string;
+  usedTicketCount: number;
+};
+
+export type DrawWinnerResponse = {
+  drawId: number;
+  winners: DrawWinnerItem[];
+};
 
 export interface PageResponse<T> {
   content: T[];
