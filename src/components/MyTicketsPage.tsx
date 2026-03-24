@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -120,7 +120,7 @@ export function MyTicketsPage() {
   });
 
   const getTypeIcon = (type: TicketType) => {
-    const icons: Record<TicketType, JSX.Element> = {
+    const icons: Record<TicketType, ReactNode> = {
       EARN: <TrendingUp className="w-5 h-5" />,
       USE: <TrendingDown className="w-5 h-5" />,
       REFUND: <TrendingUp className="w-5 h-5" />,

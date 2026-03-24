@@ -1,108 +1,66 @@
-import { useState } from 'react';
+import { useState, useEffect, ReactNode } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Heart, Clock, Ticket } from 'lucide-react';
-
-type DrawStatus = 'OPEN' | 'LOCKED' | 'DONE';
-
-interface LikedDraw {
-  id: number;
-  title: string;
-  description: string;
-  image: string;
-  ticketCost: number;
-  timeLeft: string;
-  status: DrawStatus;
-  totalEntries: number;
-  likedDate: string;
-}
+import { fetchMyLikedDraws, unlikeDraw, LikedDraw, DrawStatus } from '../api/bookmark';
 
 export function MyLikedPage() {
   const navigate = useNavigate();
-  const [likedDraws, setLikedDraws] = useState<LikedDraw[]>([
-    {
-      id: 1,
-      title: 'Sony WH-1000XM5',
-      description: '최고의 노이즈 캔슬링 헤드폰',
-      image: 'https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=600',
-      ticketCost: 2,
-      timeLeft: '18:15:30',
-      status: 'OPEN',
-      totalEntries: 234,
-      likedDate: '2026-01-28',
-    },
-    {
-      id: 2,
-      title: 'PlayStation 5',
-      description: '차세대 게임 콘솔',
-      image: 'https://images.unsplash.com/photo-1604846887565-640d2f52d564?w=600',
-      ticketCost: 8,
-      timeLeft: '08:20:45',
-      status: 'OPEN',
-      totalEntries: 567,
-      likedDate: '2026-01-27',
-    },
-    {
-      id: 3,
-      title: 'MacBook Pro 16',
-      description: 'M3 Max 칩 탑재',
-      image: 'https://images.unsplash.com/photo-1511385348-a52b4a160dc2?w=600',
-      ticketCost: 15,
-      timeLeft: '48:00:00',
-      status: 'OPEN',
-      totalEntries: 789,
-      likedDate: '2026-01-26',
-    },
-    {
-      id: 4,
-      title: 'Canon EOS R6',
-      description: '전문가용 미러리스 카메라',
-      image: 'https://images.unsplash.com/photo-1580978021179-edb8cd69dbd1?w=600',
-      ticketCost: 10,
-      timeLeft: '응모 마감',
-      status: 'LOCKED',
-      totalEntries: 432,
-      likedDate: '2026-01-25',
-    },
-    {
-      id: 5,
-      title: 'AirPods Pro',
-      description: '액티브 노이즈 캔슬링 이어폰',
-      image: 'https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=600',
-      ticketCost: 2,
-      timeLeft: '추첨 완료',
-      status: 'DONE',
-      totalEntries: 891,
-      likedDate: '2026-01-20',
-    },
-    {
-      id: 6,
-      title: 'iPad Pro 12.9',
-      description: 'M2 칩 탑재 태블릿',
-      image: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=600',
-      ticketCost: 12,
-      timeLeft: '02:15:00',
-      status: 'OPEN',
-      totalEntries: 345,
-      likedDate: '2026-01-26',
-    },
-  ]);
+  const [likedDraws, setLikedDraws] = useState<LikedDraw[]>([]);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleUnlike = (drawId: number, event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    if (window.confirm('찜을 해제하시겠습니까?')) {
-      setLikedDraws((prev) => prev.filter((draw) => draw.id !== drawId));
+  useEffect(() => {
+    loadDraws();
+  }, [page]);
+
+  const loadDraws = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetchMyLikedDraws(page, 20);
+      setLikedDraws(res.items);
+      setTotalPages(res.totalPages);
+    } catch (e) {
+      setError('북마크 목록을 불러오지 못했습니다.');
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusBadge = (status: DrawStatus) => {
-    const badges = {
-      OPEN: { text: '응모 가능', color: 'bg-green-100 text-green-800' },
-      LOCKED: { text: '응모 마감', color: 'bg-gray-100 text-gray-800' },
-      DONE: { text: '추첨 완료', color: 'bg-blue-100 text-blue-800' },
+  const handleUnlike = async (drawId: number, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!window.confirm('찜을 해제하시겠습니까?')) return;
+
+    try {
+      // 낙관적 업데이트
+      setLikedDraws((prev) => prev.filter((draw) => draw.id !== drawId));
+      
+      // 실제 서버 호출
+      await unlikeDraw(drawId);
+    } catch (e) {
+      // 실패 시 복구
+      loadDraws();
+      alert('찜 해제에 실패했습니다. 다시 시도해주세요.');
+    }
+  };
+
+  // ✅ 전체 DrawStatus 포함 (DRAFT도 가능)
+  const getStatusBadge = (status: DrawStatus): ReactNode => {
+    const badges: Record<DrawStatus, { text: string; color: string }> = {
+      DRAFT: { text: '작성중', color: 'bg-gray-100 text-gray-800' },
+      ACTIVE: { text: '응모 가능', color: 'bg-green-100 text-green-800' },
+      DRAWING: { text: '추첨중', color: 'bg-yellow-100 text-yellow-800' },
+      CLOSE: { text: '마감', color: 'bg-blue-100 text-blue-800' },
+      CANCEL: { text: '취소', color: 'bg-red-100 text-red-800' },
     };
-    const badge = badges[status];
+    
+    const badge = badges[status] || { text: '알수없음', color: 'bg-gray-100 text-gray-800' };
+    
     return (
       <span className={`px-3 py-1 rounded-full text-xs font-medium ${badge.color}`}>
         {badge.text}
@@ -110,8 +68,21 @@ export function MyLikedPage() {
     );
   };
 
-  const activeDraws = likedDraws.filter((draw) => draw.status === 'OPEN');
-  const endedDraws = likedDraws.filter((draw) => draw.status !== 'OPEN');
+  // ✅ 응모 가능: ACTIVE만
+  // 진행중/대기: DRAFT, DRAWING, CLOSE, CANCEL
+  const activeDraws = likedDraws.filter((draw) => draw.status === 'ACTIVE');
+  const otherDraws = likedDraws.filter((draw) => draw.status !== 'ACTIVE');
+
+  if (loading && likedDraws.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">북마크 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -134,6 +105,18 @@ export function MyLikedPage() {
 
       {/* 메인 콘텐츠 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error ? (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center mb-8">
+            <p className="text-red-800 mb-2">{error}</p>
+            <button
+              onClick={loadDraws}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              다시 불러오기
+            </button>
+          </div>
+        ) : null}
+
         {likedDraws.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
             <Heart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -159,20 +142,20 @@ export function MyLikedPage() {
                 <p className="text-2xl font-bold text-green-600">{activeDraws.length}개</p>
               </div>
               <div className="bg-white rounded-xl p-4 shadow-lg">
-                <p className="text-sm text-gray-600 mb-1">종료된 드로우</p>
-                <p className="text-2xl font-bold text-gray-600">{endedDraws.length}개</p>
+                <p className="text-sm text-gray-600 mb-1">대기/종료</p>
+                <p className="text-2xl font-bold text-gray-600">{otherDraws.length}개</p>
               </div>
             </div>
 
-            {/* 진행중인 드로우 */}
+            {/* 응모 가능한 드로우 (ACTIVE) */}
             {activeDraws.length > 0 && (
               <section className="mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">진행중인 드로우</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">응모 가능한 드로우</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {activeDraws.map((draw) => (
                     <Link
                       key={draw.id}
-                      to={`/draw/${draw.id}`}
+                      to={`/draws/${draw.id}`}
                       className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow group"
                     >
                       <div className="relative">
@@ -184,6 +167,7 @@ export function MyLikedPage() {
                         <button
                           onClick={(e) => handleUnlike(draw.id, e)}
                           className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors"
+                          title="찜 해제"
                         >
                           <Heart className="w-5 h-5 fill-red-500 text-red-500" />
                         </button>
@@ -193,9 +177,7 @@ export function MyLikedPage() {
                       </div>
                       <div className="p-4">
                         <h3 className="font-bold text-gray-900 mb-1 line-clamp-1">{draw.title}</h3>
-                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                          {draw.description}
-                        </p>
+                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{draw.description}</p>
                         <div className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-1 text-gray-600">
                             <Clock className="w-4 h-4" />
@@ -216,15 +198,15 @@ export function MyLikedPage() {
               </section>
             )}
 
-            {/* 종료된 드로우 */}
-            {endedDraws.length > 0 && (
+            {/* 대기/종료 드로우 (DRAFT, DRAWING, CLOSE, CANCEL) */}
+            {otherDraws.length > 0 && (
               <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">종료된 드로우</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">대기/종료 드로우</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {endedDraws.map((draw) => (
+                  {otherDraws.map((draw) => (
                     <Link
                       key={draw.id}
-                      to={`/draw/${draw.id}`}
+                      to={`/draws/${draw.id}`}
                       className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow group opacity-75 hover:opacity-100"
                     >
                       <div className="relative">
@@ -236,6 +218,7 @@ export function MyLikedPage() {
                         <button
                           onClick={(e) => handleUnlike(draw.id, e)}
                           className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors"
+                          title="찜 해제"
                         >
                           <Heart className="w-5 h-5 fill-red-500 text-red-500" />
                         </button>
@@ -245,9 +228,7 @@ export function MyLikedPage() {
                       </div>
                       <div className="p-4">
                         <h3 className="font-bold text-gray-900 mb-1 line-clamp-1">{draw.title}</h3>
-                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                          {draw.description}
-                        </p>
+                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{draw.description}</p>
                         <div className="flex items-center justify-between text-sm">
                           <div className="text-gray-600">{draw.timeLeft}</div>
                           <div className="flex items-center gap-1 text-purple-600 font-medium">
@@ -263,6 +244,29 @@ export function MyLikedPage() {
                   ))}
                 </div>
               </section>
+            )}
+
+            {/* 페이지네이션 */}
+            {totalPages > 1 && (
+              <div className="flex justify-center gap-2 mt-12">
+                <button
+                  disabled={page === 0 || loading}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  이전
+                </button>
+                <span className="px-4 py-2 text-sm text-gray-700 font-medium">
+                  {page + 1} / {totalPages}
+                </span>
+                <button
+                  disabled={page + 1 >= totalPages || loading}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  다음
+                </button>
+              </div>
             )}
           </>
         )}
