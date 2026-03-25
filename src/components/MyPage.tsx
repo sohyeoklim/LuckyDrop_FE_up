@@ -1,5 +1,5 @@
 import { Link, useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, Ticket, Heart, ListChecks, History, Award, TrendingUp, LogOut, Settings } from 'lucide-react';
+import { ArrowLeft, Ticket, Heart, ListChecks, History, Award, TrendingUp, LogOut, Settings, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getTicketWallet, getTicketLedger } from '../api/client'; 
 import { format } from 'date-fns';
@@ -190,6 +190,7 @@ export function MyPage() {
   };
 
   const isHost = user.role === 'HOST';
+  const isAdmin = user.role === 'ADMIN';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -205,14 +206,25 @@ export function MyPage() {
               <span className="font-medium">돌아가기</span>
             </button>
             <h1 className="text-xl font-bold text-gray-900">마이페이지</h1>
-            <Link
-              to="/my/edit"
-              replace
-              className="flex items-center gap-2 text-purple-600 hover:text-purple-700 transition-colors"
-            >
-              <Settings className="w-5 h-5" />
-              <span className="font-medium">정보수정</span>
-            </Link>
+            <div className="flex items-center gap-4">
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className="flex items-center gap-2 text-purple-600 hover:text-purple-700 transition-colors"
+                >
+                  <ShieldCheck className="w-5 h-5" />
+                  <span className="font-bold">관리자</span>
+                </Link>
+              )}
+              <Link
+                to="/my/edit"
+                replace
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <Settings className="w-5 h-5" />
+                <span className="font-medium">정보수정</span>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -236,13 +248,17 @@ export function MyPage() {
 
           <div className="relative flex flex-col items-center text-center mb-8">
             <div className={`w-24 h-24 rounded-full backdrop-blur-sm border-4 flex items-center justify-center text-4xl font-extrabold shadow-xl mb-4 select-none ${
-              isHost ? 'bg-yellow-400/30 border-yellow-300/60' : 'bg-white/25 border-white/40'
+              isAdmin ? 'bg-purple-400/30 border-purple-300/60' : isHost ? 'bg-yellow-400/30 border-yellow-300/60' : 'bg-white/25 border-white/40'
             }`}>
               {user.nickname?.charAt(0).toUpperCase()}
             </div>
             <div className="flex items-center gap-2 mb-1">
               <h2 className="text-2xl font-bold">{user.nickname}</h2>
-              {isHost ? (
+              {isAdmin ? (
+                <span className="text-xs bg-purple-900/40 border border-purple-300/50 backdrop-blur-sm px-2.5 py-0.5 rounded-full font-semibold text-purple-100">
+                  🛡️ 관리자
+                </span>
+              ) : isHost ? (
                 <span className="text-xs bg-yellow-400/30 border border-yellow-300/50 backdrop-blur-sm px-2.5 py-0.5 rounded-full font-semibold text-yellow-100">
                   🏆 호스트
                 </span>

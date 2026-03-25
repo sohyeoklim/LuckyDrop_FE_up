@@ -3,7 +3,7 @@ import apiClient from '../api/client';
 
 interface User {
   id: string;
-  role: 'USER' | 'HOST';
+  role: 'USER' | 'HOST' | 'ADMIN';
   name?: string;
   nickname: string;
   email: string;
@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const parsed: any = JSON.parse(localUserData);
           const safeUser: User = {
             id: String(parsed.id),
-            role: parsed.role as 'USER' | 'HOST',
+            role: parsed.role as 'USER' | 'HOST' | 'ADMIN',
             nickname: String(parsed.nickname),
             email: String(parsed.email),
             ...(parsed.phone && { phone: String(parsed.phone) }),
