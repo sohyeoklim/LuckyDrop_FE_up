@@ -2,10 +2,10 @@ import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, Ticket, Heart, ListChecks, History, Award, TrendingUp, LogOut, Settings, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getTicketWallet, getTicketLedger } from '../api/client'; 
+import { fetchMyLikedDraws, LikedDraw } from '../api/bookmark';
 import { format } from 'date-fns';
 import { useState, useEffect } from 'react';
-import apiClient from '../api/client'; // ✅ 기존 apiClient 사용
-
+import apiClient from '../api/client';
 type TicketType = 'EARN' | 'USE' | 'REFUND' | 'ADJUST';
 
 interface LedgerEntry {
@@ -22,7 +22,6 @@ interface Wallet {
   totalSpent: number;
 }
 
-// ✅ MyEntriesPage와 동일한 인터페이스
 type EntryStatus = 'OPEN' | 'LOCKED' | 'DRAWING' | 'DONE' | 'WON' | 'LOST';
 
 interface RecentEntry {
@@ -34,7 +33,6 @@ interface RecentEntry {
   status: EntryStatus;
 }
 
-// 타입 -> 한글 라벨 매핑
 const typeLabelMap: Record<TicketType, string> = {
   EARN: '지급',
   USE: '사용',
@@ -65,12 +63,25 @@ const getAmountSign = (type: TicketType): 1 | -1 => {
   }
 };
 
+const mapBackendStatus = (backendStatus: string): EntryStatus => {
+  switch (backendStatus) {
+    case 'OPEN':
+    case 'ACTIVE': return 'OPEN';
+    case 'DRAWING': return 'DRAWING';
+    case 'WON': return 'WON';
+    case 'LOST': return 'LOST';
+    case 'COMPLETED':
+    case 'DONE':
+    case 'CLOSE': return 'DONE';
+    default: return 'LOCKED';
+  }
+};
+
 const getDisplayAmount = (type: TicketType, amount: number): string => {
   const sign = getAmountSign(type);
   return `${sign === 1 ? '+' : ''}${amount}T`;
 };
 
-// ✅ 상태 배지 컴포넌트 (MyEntriesPage와 동일)
 const getStatusBadge = (status: EntryStatus) => {
   const badges = {
     OPEN: { text: '진행중', color: 'bg-green-100 text-green-800' },
@@ -88,10 +99,7 @@ const getStatusBadge = (status: EntryStatus) => {
   );
 };
 
-// ✅ 티켓 절댓값 표시 (MyEntriesPage와 동일)
-const formatTicketUsed = (ticketUsed: number) => {
-  return Math.abs(ticketUsed);
-};
+const formatTicketUsed = (ticketUsed: number) => Math.abs(ticketUsed);
 
 export function MyPage() {
   const navigate = useNavigate();
@@ -101,37 +109,44 @@ export function MyPage() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [ticketHistory, setTicketHistory] = useState<LedgerEntry[]>([]);
   const [recentEntries, setRecentEntries] = useState<RecentEntry[]>([]);
+  const [likedDraws, setLikedDraws] = useState<LikedDraw[]>([]);
   const [apiLoading, setApiLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const stats = {
-    totalEntries: 23,
-    likedDraws: 8,
-    wonDraws: 2,
-    ticketUsed: wallet?.totalSpent ?? 0,
-  };
-
-  const likedDraws = [
-    { id: 1, title: 'Sony WH-1000XM5', image: 'https://images.unsplash.com/photo-1674658556545-f18d4080ab6c?w=400', timeLeft: '18:15:30', ticketCost: 2 },
-    { id: 2, title: 'PlayStation 5', image: 'https://images.unsplash.com/photo-1604846887565-640d2f52d564?w=400', timeLeft: '08:20:45', ticketCost: 8 },
-  ];
-
-  // ✅ 기존 MyEntriesPage의 refreshEntries 로직 재사용
+  // ✅ 이미지 변환 포함한 최근 응모 내역 로드
   const fetchRecentEntries = async () => {
     if (!user?.id) return;
     
     try {
       const { data } = await apiClient.get('/api/draws/my-entries', { 
-        params: {
-          page: 0,      // 첫 페이지
-          size: 3,      // 최근 3개만
-        }
+        params: { page: 0, size: 3 }
       });
       
-      // ✅ content에서 최근 3개만 추출
-      setRecentEntries(data.content || []);
+      // ✅ 백엔드 → 프론트엔드 데이터 변환 (이미지/상태 처리)
+      const transformedEntries = (data.content || []).map((item: any) => ({
+        drawId: item.drawId,
+        drawTitle: item.drawTitle,
+        drawImage: item.drawImage && item.drawImage !== '' && item.drawImage !== '/images/default-draw.jpg'
+          ? `http://localhost:8080${item.drawImage}`
+          : '/placeholder.jpg',
+        entryDate: item.entryDate,
+        ticketUsed: Math.abs(item.ticketUsed || 0),
+        status: mapBackendStatus(item.status),
+      }));
+      
+      setRecentEntries(transformedEntries);
     } catch (error) {
       console.error('최근 응모 내역 로드 실패:', error);
+    }
+  };
+
+  // 찜한 드로우 최근 2개
+  const fetchRecentLikedDraws = async () => {
+    try {
+      const res = await fetchMyLikedDraws(0, 2);
+      setLikedDraws(res.items);
+    } catch (error) {
+      console.error('찜한 드로우 로드 실패:', error);
     }
   };
 
@@ -142,20 +157,21 @@ export function MyPage() {
       setApiLoading(true);
       setApiError(null);
       try {
-        const [walletData, ledgerData] = await Promise.all([
-          getTicketWallet(user.id),
-          getTicketLedger(user.id),
+        const [walletData, ledgerData, likedRes] = await Promise.all([
+          getTicketWallet(user.id.toString()),
+          getTicketLedger(user.id.toString()),
+          fetchMyLikedDraws(0, 2), // ✅ 실제 API 호출
         ]);
 
         setWallet(walletData);
-
-        // 티켓 내역 - 최근 4개
+        
         const recentLedger = ledgerData
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .slice(0, 4);
         setTicketHistory(recentLedger);
 
-        // ✅ 기존 API로 최근 응모 내역 3개 가져오기
+        setLikedDraws(likedRes.items); // ✅ 실제 찜 데이터 설정
+
         await fetchRecentEntries();
       } catch (err) {
         console.error('마이페이지 데이터 로드 실패:', err);
@@ -180,12 +196,12 @@ export function MyPage() {
     return <Navigate to="/login" replace />;
   }
 
-  const handleLogout =  async() => {
+  const handleLogout = async () => {
     try {
-    logout(); // AuthContext의 logout 호출
-    navigate('/login'); // ✅ 로그인 페이지로 강제 이동
+      logout();
+      navigate('/login');
     } catch (error) {
-    console.error('로그아웃 실패:', error);
+      console.error('로그아웃 실패:', error);
     }
   };
 
@@ -230,9 +246,8 @@ export function MyPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 프로필 카드 (기존과 동일) */}
+        {/* 프로필 카드 - 통계 제거 */}
         <div className="relative bg-gradient-to-br from-purple-600 via-purple-500 to-pink-500 rounded-3xl shadow-2xl p-8 text-white mb-8 overflow-hidden">
-          {/* ... 기존 프로필 카드 내용 동일 ... */}
           <div className="absolute -top-12 -right-12 w-56 h-56 bg-white/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute -bottom-20 -left-12 w-72 h-72 bg-pink-400/20 rounded-full blur-3xl pointer-events-none" />
 
@@ -246,7 +261,7 @@ export function MyPage() {
             </button>
           </div>
 
-          <div className="relative flex flex-col items-center text-center mb-8">
+          <div className="relative flex flex-col items-center text-center">
             <div className={`w-24 h-24 rounded-full backdrop-blur-sm border-4 flex items-center justify-center text-4xl font-extrabold shadow-xl mb-4 select-none ${
               isAdmin ? 'bg-purple-400/30 border-purple-300/60' : isHost ? 'bg-yellow-400/30 border-yellow-300/60' : 'bg-white/25 border-white/40'
             }`}>
@@ -278,27 +293,11 @@ export function MyPage() {
               <span className="text-sm opacity-75">장</span>
             </div>
           </div>
-
-          <div className="relative w-full h-px bg-white/20 mb-6" />
-          <div className="relative grid grid-cols-4 gap-3">
-            {[
-              { icon: <ListChecks className="w-5 h-5" />, value: stats.totalEntries, label: '응모 횟수' },
-              { icon: <Heart className="w-5 h-5" />, value: stats.likedDraws, label: '찜한 드로우' },
-              { icon: <Award className="w-5 h-5" />, value: stats.wonDraws, label: '당첨 횟수' },
-              { icon: <TrendingUp className="w-5 h-5" />, value: stats.ticketUsed, label: '사용 티켓' },
-            ].map((stat, i) => (
-              <div key={i} className="flex flex-col items-center bg-white/10 hover:bg-white/20 transition-colors backdrop-blur-sm rounded-2xl p-4 cursor-default">
-                <div className="mb-2 opacity-80">{stat.icon}</div>
-                <p className="text-2xl font-bold leading-none mb-1">{stat.value}</p>
-                <p className="text-xs opacity-75 text-center">{stat.label}</p>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* 콘텐츠 섹션 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* 최근 응모 내역 - ✅ 기존 API 사용 */}
+          {/* 최근 응모 내역 */}
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-gray-900">최근 응모 내역</h2>
@@ -344,7 +343,7 @@ export function MyPage() {
             </div>
           </section>
 
-          {/* 찜한 드로우 (기존과 동일) */}
+          {/* 찜한 드로우 - 실제 API 데이터 */}
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-gray-900">찜한 드로우</h2>
@@ -360,9 +359,9 @@ export function MyPage() {
                       <div className="flex gap-4">
                         <img src={draw.image} alt={draw.title} className="w-20 h-20 object-cover rounded-lg" />
                         <div className="flex-1">
-                          <h3 className="font-medium text-gray-900 mb-1">{draw.title}</h3>
+                          <h3 className="font-medium text-gray-900 mb-1 line-clamp-1">{draw.title}</h3>
                           <p className="text-sm text-gray-600 mb-2">남은 시간: {draw.timeLeft}</p>
-                          <span className="text-sm text-purple-600 font-medium">{draw.ticketCost} 티켓</span>
+                          <span className="text-sm text-purple-600 font-medium">{draw.ticketCost}T</span>
                         </div>
                         <Heart className="w-5 h-5 fill-red-500 text-red-500 flex-shrink-0" />
                       </div>
@@ -379,7 +378,7 @@ export function MyPage() {
           </section>
         </div>
 
-        {/* 티켓 내역 (기존과 동일) */}
+        {/* 티켓 내역 */}
         <section className="mt-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-gray-900">티켓 내역</h2>
@@ -420,7 +419,7 @@ export function MyPage() {
           </div>
         </section>
 
-        {/* 퀵 액션 버튼 (기존과 동일) */}
+        {/* 퀵 액션 버튼 */}
         <div className="mt-8 grid grid-cols-2 gap-4">
           <Link to="/missions" className="bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl p-6 text-center hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl">
             <Ticket className="w-8 h-8 mx-auto mb-2" />

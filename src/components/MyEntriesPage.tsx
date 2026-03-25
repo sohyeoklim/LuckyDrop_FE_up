@@ -4,7 +4,8 @@ import { ArrowLeft, Search, Filter, Loader2, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import apiClient from '../api/client';
 
-type EntryStatus = 'OPEN' | 'LOCKED' | 'DRAWING' | 'DONE' | 'WON' | 'LOST';
+// ✅ 백엔드 DrawStatus와 매핑
+type EntryStatus = 'ACTIVE' | 'DRAWING' | 'CLOSE' | 'CANCEL';
 
 interface Entry {
   id: number;
@@ -16,7 +17,7 @@ interface Entry {
   entryCount: number;
   status: EntryStatus;
   resultDate?: string;
-  isWinner: number | boolean;
+  isWinner: number;
 }
 
 interface EntryStats {
@@ -36,22 +37,36 @@ export function MyEntriesPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | EntryStatus>('all');
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const SIZE = 10;
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // 👈 데모 스타일 상태 배지
+  // ✅ 백엔드 DrawStatus 그대로 사용 (매핑 불필요)
+  const mapBackendStatus = (backendStatus: string): EntryStatus => {
+    // 백엔드 enum 값 그대로 반환 (대소문자 주의)
+    switch (backendStatus.toUpperCase()) {
+      case 'DRAFT':
+      case 'ACTIVE': 
+      case 'DRAWING': 
+      case 'CLOSE': 
+      case 'CANCEL': 
+        return backendStatus.toUpperCase() as EntryStatus;
+      default: 
+        return 'CLOSE'; // 기본값
+    }
+  };
+
+  // ✅ DrawStatus에 맞춘 상태 배지
   const getStatusBadge = (status: EntryStatus, isWinner: boolean) => {
-    const badges = {
-      OPEN: { text: '진행중', color: 'bg-green-100 text-green-800' },
-      LOCKED: { text: '응모마감', color: 'bg-gray-100 text-gray-800' },
+    const badges: Record<EntryStatus, { text: string; color: string }> = {
+      ACTIVE: { text: '진행중', color: 'bg-green-100 text-green-800' },
       DRAWING: { text: '추첨중', color: 'bg-yellow-100 text-yellow-800' },
-      DONE: { text: '완료', color: 'bg-blue-100 text-blue-800' },
-      WON: { text: '당첨 🎉', color: 'bg-red-100 text-red-800 font-bold' },
-      LOST: { text: '미당첨', color: 'bg-gray-100 text-gray-600' },
+      CLOSE: { text: '마감', color: 'bg-blue-100 text-blue-800' },
+      CANCEL: { text: '취소', color: 'bg-red-100 text-red-800' },
     };
-    const badge = badges[status] || badges.DONE;
+    const badge = badges[status] || badges.CLOSE;
     return (
       <span className={`px-3 py-1 rounded-full text-xs font-medium ${badge.color}`}>
         {badge.text}
@@ -60,13 +75,47 @@ export function MyEntriesPage() {
   };
 
   const isEntryWinner = (entry: Entry): boolean => {
-    return entry.isWinner === true || entry.isWinner === 1;
+    return entry.isWinner === 1;
   };
 
-  // ✅ 티켓 사용량 항상 양수로 반환 (백엔드 음수 처리)
   const getTicketUsedDisplay = (ticketUsed: number): number => {
     return Math.abs(ticketUsed || 0);
   };
+
+  // ✅ 백엔드 데이터 → 프론트엔드 데이터 변환 (DrawStatus 그대로)
+  const transformEntryData = (backendData: any): Entry[] => {
+    return backendData.content?.map((item: any) => ({
+      id: item.id || item.drawId,
+      drawId: item.drawId,
+      drawTitle: item.drawTitle,
+      drawImage: item.drawImage && item.drawImage !== '' && item.drawImage !== '/images/default-draw.jpg'
+        ? `http://localhost:8080${item.drawImage}`
+        : '/placeholder.jpg',
+      entryDate: item.entryDate,
+      ticketUsed: Math.abs(item.ticketUsed || 0),
+      entryCount: Math.max(item.entryCount || 0, 1),
+      status: mapBackendStatus(item.status), // 백엔드 DrawStatus 그대로
+      resultDate: item.resultDate,
+      isWinner: item.isWinner === 1 ? 1 : 0,
+    })) || [];
+  };
+
+  const loadStats = useCallback(async () => {
+    if (!user?.id) return;
+    
+    setLoadingStats(true);
+    try {
+      console.log('📊 통계 API 호출 중...');
+      const { data } = await apiClient.get('/api/draws/my-entries/stats');
+      setStats(data);
+      console.log('✅ 통계 로드 완료:', data);
+    } catch (error: any) {
+      console.error('❌ 통계 API 실패:', error);
+      setStats(null);
+    } finally {
+      setLoadingStats(false);
+    }
+  }, [user?.id]);
 
   const refreshEntries = useCallback(async (reset = true) => {
     if (!user?.id || abortControllerRef.current) {
@@ -88,24 +137,29 @@ export function MyEntriesPage() {
       const params: any = {
         page: reset ? 0 : currentPage,
         size: SIZE,
-        ...(filterStatus !== 'all' && { status: filterStatus }),
-        ...(searchQuery.trim() && { search: searchQuery.trim() })
+        ...(filterStatus !== 'all' && { status: filterStatus }), // ✅ 백엔드 DrawStatus 그대로 전달
+        ...(searchQuery.trim() && { search: searchQuery.trim() }),
       };
+      
+      console.log('🔍 Entries API params:', params);
       
       const { data } = await apiClient.get('/api/draws/my-entries', { 
         params,
         signal: abortController.signal 
       });
       
+      const newEntries = transformEntryData(data);
+      console.log('✅ Entries 로드:', newEntries.length, '개');
+      
       if (reset) {
-        setEntries(data.content || []);
+        setEntries(newEntries);
       } else {
-        setEntries(prev => [...prev, ...(data.content || [])]);
+        setEntries(prev => [...prev, ...newEntries]);
         setCurrentPage(prev => prev + 1);
       }
       setHasMore(!data.last);
     } catch (error: any) {
-      if (error.name !== 'CanceledError') {
+      if (error.name !== 'AbortError') {
         console.error('❌ 응모 내역 불러오기 실패:', error);
       }
     } finally {
@@ -114,15 +168,6 @@ export function MyEntriesPage() {
       abortControllerRef.current = null;
     }
   }, [user?.id, filterStatus, searchQuery, currentPage]);
-
-  const loadStats = useCallback(async () => {
-    try {
-      const { data } = await apiClient.get('/api/draws/my-entries/stats');
-      setStats(data);
-    } catch (error) {
-      console.error('통계 불러오기 실패:', error);
-    }
-  }, []);
 
   useEffect(() => {
     if (user?.id) {
@@ -143,18 +188,12 @@ export function MyEntriesPage() {
     await refreshEntries(false);
   };
 
-  // ✅ 완전 수정: Math.abs() 확실히 적용
-  const calcStats = () => {
-    if (!entries.length) return { total: 0, inProgress: 0, won: 0, totalTicketsUsed: 0 };
-    
-    const total = entries.length;
-    const inProgress = entries.filter((e) => ['OPEN', 'LOCKED', 'DRAWING'].includes(e.status)).length;
-    const won = entries.filter((e) => isEntryWinner(e)).length;
-    const totalTicketsUsed = entries.reduce((sum, e) => {
-      return sum + Math.abs(e.ticketUsed || 0); // ✅ 확실히 양수
-    }, 0);
-    
-    return { total, inProgress, won, totalTicketsUsed };
+  // ✅ DrawStatus에 맞춘 통계 계산
+  const currentStats = stats || {
+    total: entries.length,
+    inProgress: entries.filter(e => ['ACTIVE', 'DRAWING'].includes(e.status)).length,
+    won: entries.filter(e => isEntryWinner(e)).length,
+    totalTicketsUsed: entries.reduce((sum, e) => sum + getTicketUsedDisplay(e.ticketUsed), 0),
   };
 
   if (!user) {
@@ -169,15 +208,6 @@ export function MyEntriesPage() {
       </div>
     );
   }
-
-  const currentStats = stats 
-  ? {
-      total: stats.total,
-      inProgress: stats.inProgress,
-      won: stats.won,
-      totalTicketsUsed: Math.abs(stats.totalTicketsUsed || 0)  // ✅ API 음수 → 양수
-    }
-  : calcStats();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -199,7 +229,7 @@ export function MyEntriesPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 통계 카드 - ✅ 이제 양수로 표시됨 */}
+        {/* 통계 카드 */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-xl p-4 shadow-lg">
             <p className="text-sm text-gray-600 mb-1">총 응모</p>
@@ -219,7 +249,7 @@ export function MyEntriesPage() {
           </div>
         </div>
 
-        {/* 검색 및 필터 */}
+        {/* 검색 및 필터 - ✅ DrawStatus로 변경 */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="relative">
@@ -240,13 +270,11 @@ export function MyEntriesPage() {
                 onChange={(e) => setFilterStatus(e.target.value as any)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 appearance-none bg-white"
               >
-                <option value="all">모든 상태</option>
-                <option value="OPEN">진행중</option>
-                <option value="LOCKED">응모마감</option>
+                <option value="all">모든 응모내역</option>
+                <option value="ACTIVE">진행중</option>
                 <option value="DRAWING">추첨중</option>
-                <option value="WON">당첨</option>
-                <option value="LOST">미당첨</option>
-                <option value="DONE">완료</option>
+                <option value="CLOSE">마감</option>
+                <option value="CANCEL">강제취소</option>
               </select>
               <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
             </div>
@@ -270,9 +298,12 @@ export function MyEntriesPage() {
                 >
                   <div className="flex gap-4">
                     <img
-                      src={entry.drawImage || '/placeholder.jpg'}
+                      src={entry.drawImage}
                       alt={entry.drawTitle}
                       className="w-24 h-24 object-cover rounded-lg flex-shrink-0"
+                      onError={(e) => {
+                        e.currentTarget.src = '/placeholder.jpg';
+                      }}
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between mb-2">
@@ -285,7 +316,9 @@ export function MyEntriesPage() {
                         <p>응모일: {entry.entryDate}</p>
                         <p>
                           응모 횟수: <span className="font-medium">{entry.entryCount}회</span> (티켓{' '}
-                          <span className="font-bold text-purple-600">{getTicketUsedDisplay(entry.ticketUsed)}개</span> 사용)
+                          <span className="font-bold text-purple-600">
+                            {getTicketUsedDisplay(entry.ticketUsed)}개
+                          </span> 사용)
                         </p>
                         {entry.resultDate && (
                           <p>결과 발표: <span className="font-medium">{entry.resultDate}</span></p>
