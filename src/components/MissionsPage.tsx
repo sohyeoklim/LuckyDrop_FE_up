@@ -1,4 +1,5 @@
-import { useState } from 'react';
+// import { useState } from 'react'; 출석미션 버튼 비활성화로 인한 변경사항
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -11,7 +12,7 @@ import {
   Flame,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-// import axios from 'axios';
+// import axios from 'axios'; 광고미션으로 인한 변경사항
 import apiClient from '@/api/client';
 
 interface Mission {
@@ -28,8 +29,17 @@ interface Mission {
 
 export function MissionsPage() {
   const navigate = useNavigate();
+//   const todayKey = new Date().toISOString().slice(0, 10); // 오늘 날짜 추가 - UTC 기준
+  const getTodayKey = () => new Date().toLocaleDateString('sv-SE'); // sv-SE는 YYYY-MM-DD 형식
+  const ATTENDANCE_STORAGE_KEY = 'attendanceCheckedDate'; // storage key 추가
+  const ATTENDANCE_STREAK_KEY = 'attendanceStreak'; // 연속 출석체크 검사 - api 로 따로 만들어도 됨
+
+//   const savedAttendanceDate = localStorage.getItem(ATTENDANCE_STORAGE_KEY);
+//   const isAttendanceCompletedToday = savedAttendanceDate === todayKey;
+  const [attendanceCompletedToday, setAttendanceCompletedToday] = useState(false);
+
   const [userTickets] = useState(120);
-  const [consecutiveDays] = useState(7);
+  const [consecutiveDays, setConsecutiveDays] = useState(0);
 
   const [missions, setMissions] = useState<Mission[]>([
     // 일일 미션
@@ -56,7 +66,7 @@ export function MissionsPage() {
       title: '드로우 응모',
       description: '오늘 1회 이상 드로우에 응모하기',
       reward: 3,
-      completed: true,
+      completed: false,
       type: 'daily',
       icon: <Gift className="w-6 h-6" />,
     },
@@ -107,7 +117,7 @@ export function MissionsPage() {
       title: '럭키드로우 체험',
       description: '첫 럭키드로우에 응모하세요',
       reward: 15,
-      completed: true,
+      completed: false,
       type: 'event',
       icon: <Gift className="w-6 h-6" />,
     },
@@ -137,6 +147,38 @@ export function MissionsPage() {
     },
   ]);
 
+  useEffect(() => {
+    const todayKey = getTodayKey();
+    const savedDate = localStorage.getItem(ATTENDANCE_STORAGE_KEY);
+    const savedStreak = Number(localStorage.getItem(ATTENDANCE_STREAK_KEY) || '0');
+
+    let nextStreak = 0;
+    let completedToday = false;
+
+    if (savedDate) {
+      const today = new Date(todayKey + 'T00:00:00');
+      const lastDate = new Date(savedDate + 'T00:00:00');
+
+      const diffTime = today.getTime() - lastDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 0) {
+        completedToday = true;
+        nextStreak = savedStreak;
+      } else if (diffDays === 1) {
+        completedToday = false;
+        nextStreak = savedStreak;
+      } else {
+        completedToday = false;
+        nextStreak = 0;
+        localStorage.removeItem(ATTENDANCE_STREAK_KEY);
+      }
+    }
+
+    setAttendanceCompletedToday(completedToday);
+    setConsecutiveDays(nextStreak);
+  }, []);
+
 /*
   const handleClaimReward = (missionId: number) => {
     const mission = missions.find((m) => m.id === missionId);
@@ -153,7 +195,10 @@ export function MissionsPage() {
 
 const handleClaimReward = async (missionId: number) => {
   const mission = missions.find((m) => m.id === missionId);
-  if (!mission || mission.completed) return;
+  if (!mission) return;
+
+  if (missionId === 1 && attendanceCompletedToday) return;
+  if (missionId !== 1 && mission.completed) return;
 
   // 1) 출석 미션(id === 1) 백엔드 출석 API 호출
   if (missionId === 1) {
@@ -161,72 +206,125 @@ const handleClaimReward = async (missionId: number) => {
 //       const res = await axios.post('/api/missions/attendance/check-in');
          const res = await apiClient.post('/api/missions/attendance/check-in');
 
-      const data = res.data as {
-        success: boolean;
-        alreadyCheckedIn: boolean;
-        message: string;
-        streak: number;
-        earnedTickets: number;
-        bonusTickets: number;
-        totalEarnedTickets: number;
-      };
+         const data = res.data as {
+             success: boolean;
+             alreadyCheckedIn: boolean;
+             message: string;
+             streak: number;
+             earnedTickets: number;
+             bonusTickets: number;
+             totalEarnedTickets: number;
+         };
 
-      if (!data.success) {
-        toast.error(data.message || '출석 체크에 실패했습니다.');
+          if (!data.success) {
+            toast.error(data.message || '출석 체크에 실패했습니다.');
+            return;
+          }
+
+          if (data.alreadyCheckedIn) {
+            const todayKey = getTodayKey();
+            localStorage.setItem(ATTENDANCE_STORAGE_KEY, todayKey);
+            localStorage.setItem(ATTENDANCE_STREAK_KEY, String(data.streak));
+            setConsecutiveDays(data.streak);
+            setAttendanceCompletedToday(true);
+
+            toast(data.message || '오늘의 출석체크는 완료되었습니다.');
+          } else {
+            const todayKey = getTodayKey();
+            localStorage.setItem(ATTENDANCE_STORAGE_KEY, todayKey);
+            localStorage.setItem(ATTENDANCE_STREAK_KEY, String(data.streak));
+            setConsecutiveDays(data.streak);
+            setAttendanceCompletedToday(true);
+
+            toast.success(data.message || '출석 체크 완료!');
+          }
+
+      // 출석 미션은 항상 완료 처리
+          setMissions((prev) =>
+            prev.map((m) =>
+              m.id === missionId ? { ...m, completed: true } : m
+            )
+          );
+        } catch (err) {
+          console.error(err);
+          toast.error('출석 체크 중 오류가 발생했습니다.');
+        }
+
         return;
       }
 
-      if (data.alreadyCheckedIn) {
-        toast(data.message || '오늘의 출석체크는 완료되었습니다.');
-      } else {
-        // 새 출석 + 보너스 상황
-        toast.success(data.message || '출석 체크 완료!');
+  // 2) 드로우 응모 미션(id === 3) 백엔드 claim API 호출
+    if (missionId === 3) {
+      try {
+        await apiClient.post('/api/missions/draw/daily/claim');
 
-        // TODO: userTickets, consecutiveDays를 실제 값으로 반영하고 싶으면 여기서 setState로 반영
-        // 예: setConsecutiveDays(data.streak);
-        // 예: setUserTickets((prev) => prev + data.totalEarnedTickets);
+        toast.success(`${mission.reward} 티켓을 받았습니다!`);
+
+        setMissions((prev) =>
+          prev.map((m) =>
+            m.id === missionId ? { ...m, completed: true } : m
+          )
+        );
+      } catch (err: any) {
+        console.error(err);
+
+        const message =
+          err?.response?.data?.message || '드로우 응모 미션 처리 중 오류가 발생했습니다.';
+        toast.error(message);
       }
 
-      // 출석 미션은 항상 완료 처리
-      setMissions((prev) =>
-        prev.map((m) =>
-          m.id === missionId ? { ...m, completed: true } : m
-        )
-      );
-    } catch (err) {
-      console.error(err);
-      toast.error('출석 체크 중 오류가 발생했습니다.');
+      return;
     }
 
-    return;
-  }
+     // 3) 첫 럭키드로우 체험 미션(id === 8)
+     if (missionId === 8) {
+       try {
+         await apiClient.post('/api/missions/draw/first/claim');
 
-  // 2) 광고 미션 백엔드 광고 API 호출
-  if (mission.type === 'ad') {
-    try {
-      await apiClient.post('/api/missions/ad/complete');
+         toast.success(`${mission.reward} 티켓을 받았습니다!`);
 
+         setMissions((prev) =>
+           prev.map((m) =>
+             m.id === missionId ? { ...m, completed: true } : m
+           )
+         );
+       } catch (err: any) {
+         console.error(err);
+
+         const message =
+           err?.response?.data?.message || '럭키드로우 체험 미션 처리 중 오류가 발생했습니다.';
+         toast.error(message);
+       }
+
+       return;
+     }
+
+      // 4) 광고 미션 백엔드 광고 API 호출
+      if (mission.type === 'ad') {
+        try {
+          await apiClient.post('/api/missions/ad/complete');
+
+          toast.success(`${mission.reward} 티켓을 받았습니다!`);
+
+          setMissions((prev) =>
+            prev.map((m) =>
+              m.id === missionId ? { ...m, completed: true } : m
+            )
+          );
+        } catch (err) {
+          console.error(err);
+          toast.error('광고 미션 처리 중 오류가 발생했습니다.');
+        }
+
+        return;
+      }
+
+      // 5) 그 외 미션(id !== 1)은 기존처럼 로컬 처리
       toast.success(`${mission.reward} 티켓을 받았습니다!`);
 
       setMissions((prev) =>
-        prev.map((m) =>
-          m.id === missionId ? { ...m, completed: true } : m
-        )
+        prev.map((m) => (m.id === missionId ? { ...m, completed: true } : m))
       );
-    } catch (err) {
-      console.error(err);
-      toast.error('광고 미션 처리 중 오류가 발생했습니다.');
-    }
-
-    return;
-  }
-
-  // 2) 그 외 미션(id !== 1)은 기존처럼 로컬 처리
-  toast.success(`${mission.reward} 티켓을 받았습니다!`);
-
-  setMissions((prev) =>
-    prev.map((m) => (m.id === missionId ? { ...m, completed: true } : m))
-  );
 };
 
 
@@ -278,7 +376,9 @@ const handleClaimReward = async (missionId: number) => {
           </div>
           <div>
             <h3 className="font-bold text-gray-900 mb-1">{mission.title}</h3>
-            <p className="text-sm text-gray-600">{mission.description}</p>
+            <p className="text-sm text-gray-600">
+              {mission.id === 2 ? `${consecutiveDays}일 연속 출석 중!` : mission.description}
+            </p>
             {mission.progress !== undefined && mission.total !== undefined && (
               <div className="mt-2">
                 <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
@@ -307,7 +407,7 @@ const handleClaimReward = async (missionId: number) => {
         </div>
       </div>
 
-      {mission.completed ? (
+      {(mission.id === 1 ? attendanceCompletedToday : mission.completed) ? (
         <button
           disabled
           className="w-full bg-gray-100 text-gray-500 py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2"
