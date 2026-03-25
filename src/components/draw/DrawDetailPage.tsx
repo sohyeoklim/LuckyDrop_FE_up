@@ -19,6 +19,7 @@ import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
 import { useDrawDetail } from "@/hooks/useDrawDetail";
 import { useDrawWinners } from "@/hooks/useDrawWinners";
 import type { DrawStatus } from "@/types/draw";
+import type { HostWinnerInfoResponse } from "@/types/draw";
 import apiClient, { getMe } from "@/api/client";
 
 function getStatusBadge(status: DrawStatus) {
@@ -70,6 +71,10 @@ export function DrawDetailPage() {
   const [meLoaded, setMeLoaded] = useState(false);
   const [showWinnerModal, setShowWinnerModal] = useState(false);
 
+  const [hostWinnerInfo, setHostWinnerInfo] = useState<HostWinnerInfoResponse[]>([]);
+  const [hostWinnersLoading, setHostWinnersLoading] = useState(false);
+  const [hostWinnersError, setHostWinnersError] = useState(false);
+
   const { data: draw, isLoading, isError } = useDrawDetail(drawId);
   const { data: winnerData, isLoading: winnersLoading } = useDrawWinners(
   Number(drawId),
@@ -94,6 +99,46 @@ export function DrawDetailPage() {
 
     fetchMe();
   }, []);
+
+  const isMine = !!currentUserId && currentUserId === draw?.hostUserId;
+  
+  useEffect(() => {
+  const fetchHostWinnerInfo = async () => {
+    if (!drawId || !showWinnerModal || !isMine || draw?.status !== "CLOSE") return;
+
+    try {
+      setHostWinnersLoading(true);
+      setHostWinnersError(false);
+
+      const response = await apiClient.get<HostWinnerInfoResponse[]>(
+        `/api/host/draws/${drawId}/winners`
+      );
+
+      setHostWinnerInfo(response.data ?? []);
+    } catch (error) {
+      console.error("호스트용 당첨자 정보 조회 실패:", error);
+      setHostWinnersError(true);
+      setHostWinnerInfo([]);
+
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401) {
+          toast.error("로그인이 필요한 서비스입니다.");
+          return;
+        }
+        if (error.response?.status === 403) {
+          toast.error("해당 드로우의 호스트만 조회할 수 있습니다.");
+          return;
+        }
+      }
+
+      toast.error("당첨자 정보를 불러오지 못했습니다.");
+    } finally {
+      setHostWinnersLoading(false);
+    }
+  };
+
+  fetchHostWinnerInfo();
+}, [drawId, draw?.status, isMine, showWinnerModal]);
 
   const sliderSettings = {
     dots: true,
@@ -159,9 +204,6 @@ export function DrawDetailPage() {
       </div>
     );
   }
-
-  const isMine =
-    meLoaded && currentUserId !== null && draw.hostUserId === currentUserId;
 
   const canEdit =
     isMine &&
@@ -617,31 +659,61 @@ export function DrawDetailPage() {
     <div className="w-full max-w-md bg-white rounded-2xl shadow-xl">
 
       <div className="flex justify-between items-center px-5 py-4 border-b">
-        <h3 className="text-lg font-bold">당첨자 목록</h3>
+        <h3 className="text-lg font-bold"> 
+          {isMine ? "당첨자 상세 정보" : "당첨자 목록"}
+        </h3>
         <button onClick={() => setShowWinnerModal(false)}>닫기</button>
       </div>
 
       <div className="max-h-[400px] overflow-y-auto px-5 py-4">
-        {winnersLoading ? (
-          <p className="text-gray-500 text-sm">불러오는 중...</p>
-        ) : winnerData?.winners?.length ? (
-          <ul className="space-y-3">
-            {winnerData.winners.map((w, i) => (
-              <li
-                key={i}
-                className="flex justify-between border p-3 rounded-lg"
-              >
-                <span>{w.nickname}</span>
-                <span>{w.usedTicketCount}T</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-gray-500 text-sm">
-            당첨자가 없습니다.
-          </p>
-        )}
-      </div>
+  {isMine ? (
+    hostWinnersLoading ? (
+      <p className="text-gray-500 text-sm">불러오는 중...</p>
+    ) : hostWinnersError ? (
+      <p className="text-red-500 text-sm">당첨자 정보를 불러오지 못했습니다.</p>
+    ) : hostWinnerInfo.length > 0 ? (
+      <ul className="space-y-3">
+        {hostWinnerInfo.map((w) => (
+          <li
+            key={w.winnerUserId}
+            className="border p-4 rounded-lg space-y-1"
+          >
+            <p className="text-sm">
+              <span className="font-semibold text-gray-700">이름:</span> {w.name}
+            </p>
+            <p className="text-sm">
+              <span className="font-semibold text-gray-700">닉네임:</span> {w.nickname}
+            </p>
+            <p className="text-sm break-all">
+              <span className="font-semibold text-gray-700">전화번호:</span> {w.phone}
+            </p>
+            <p className="text-sm break-words [overflow-wrap:anywhere]">
+              <span className="font-semibold text-gray-700">주소:</span> {w.address}
+            </p>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p className="text-gray-500 text-sm">당첨자가 없습니다.</p>
+    )
+  ) : winnersLoading ? (
+    <p className="text-gray-500 text-sm">불러오는 중...</p>
+  ) : winnerData?.winners?.length ? (
+    <ul className="space-y-3">
+      {winnerData.winners.map((w, i) => (
+        <li
+          key={i}
+          className="flex justify-between border p-3 rounded-lg"
+        >
+          <span>{w.nickname}</span>
+          <span>{w.usedTicketCount}T</span>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p className="text-gray-500 text-sm">당첨자가 없습니다.</p>
+  )}
+</div>
 
       <div className="p-4 border-t">
         <button

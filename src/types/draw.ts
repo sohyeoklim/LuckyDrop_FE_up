@@ -62,6 +62,13 @@ export interface PageResponse<T> {
   number: number;
 }
 
+export type HostWinnerInfoResponse = {
+  winnerUserId: number;
+  name: string;
+  nickname: string;
+  phone: string;
+  address: string;
+};
 
 export interface DrawCreateRequest {
   title: string;
