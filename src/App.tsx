@@ -1,29 +1,30 @@
-  import { BrowserRouter, Routes, Route } from 'react-router-dom';
-  import { Toaster } from 'react-hot-toast';
-  import { MainPage } from '@/components/MainPage';
-  import { LoginPage } from '@/components/LoginPage';
-  import { SignupPage } from '@/components/SignupPage';
-  import { ForgotPasswordPage } from '@/components/ForgotPasswordPage';
-  import { DrawDetailPage } from '@/components/draw/DrawDetailPage';
-  import { MyPage } from '@/components/MyPage';
-  import { EditProfile } from '@/components/EditProfile';
-  import { MissionsPage } from '@/components/MissionsPage';
-  import { MyEntriesPage } from '@/components/MyEntriesPage';
-  import { MyLikedPage } from '@/components/MyLikedPage';
-  import { MyTicketsPage } from '@/components/MyTicketsPage';
-  import { DrawsListPage } from '@/components/draw/DrawsListPage';
-  import { CreateDrawPage } from '@/components/draw/CreateDrawPage';
-  import { EditDrawPage } from '@/components/draw/EditDrawPage';
-  import 'slick-carousel/slick/slick.css';
-  import 'slick-carousel/slick/slick-theme.css';
-  import { AuthProvider } from './contexts/AuthContext';
-  import AdminPage from './components/AdminPage';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { MainPage } from '@/components/MainPage';
+import { LoginPage } from '@/components/LoginPage';
+import { SignupPage } from '@/components/SignupPage';
+import { ForgotPasswordPage } from '@/components/ForgotPasswordPage';
+import { DrawDetailPage } from '@/components/draw/DrawDetailPage';
+import { MyPage } from '@/components/MyPage';
+import { EditProfile } from '@/components/EditProfile';
+import { MissionsPage } from '@/components/MissionsPage';
+import { MyEntriesPage } from '@/components/MyEntriesPage';
+import { MyLikedPage } from '@/components/MyLikedPage';
+import { MyTicketsPage } from '@/components/MyTicketsPage';
+import { DrawsListPage } from '@/components/draw/DrawsListPage';
+import { CreateDrawPage } from '@/components/draw/CreateDrawPage';
+import { EditDrawPage } from '@/components/draw/EditDrawPage';
+import 'slick-carousel/slick/slick.css';
+import 'slick-carousel/slick/slick-theme.css';
+import { AuthProvider } from './contexts/AuthContext';
+import { LoginRequiredProvider } from '@/components/providers/LoginRequiredProvider';
+import AdminPage from './components/AdminPage';
 
-
-  export default function App() {
-    return (
-      <AuthProvider>
-        <BrowserRouter>
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <LoginRequiredProvider>
           <Toaster 
             position="top-center"
             toastOptions={{
@@ -64,7 +65,8 @@
             <Route path="/missions" element={<MissionsPage />} />
             <Route path="/admin" element={<AdminPage />} />
           </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    );
-  }
+        </LoginRequiredProvider>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}
