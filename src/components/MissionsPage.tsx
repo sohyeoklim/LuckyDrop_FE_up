@@ -14,6 +14,8 @@ import {
 import toast from 'react-hot-toast';
 // import axios from 'axios'; 광고미션으로 인한 변경사항
 import apiClient from '@/api/client';
+import { useAuth } from '@/contexts/AuthContext'; // Local -> userId
+import { getTicketWallet } from '@/api/client';
 
 interface Mission {
   id: number;
@@ -31,14 +33,19 @@ export function MissionsPage() {
   const navigate = useNavigate();
 //   const todayKey = new Date().toISOString().slice(0, 10); // 오늘 날짜 추가 - UTC 기준
   const getTodayKey = () => new Date().toLocaleDateString('sv-SE'); // sv-SE는 YYYY-MM-DD 형식
-  const ATTENDANCE_STORAGE_KEY = 'attendanceCheckedDate'; // storage key 추가
-  const ATTENDANCE_STREAK_KEY = 'attendanceStreak'; // 연속 출석체크 검사 - api 로 따로 만들어도 됨
 
-//   const savedAttendanceDate = localStorage.getItem(ATTENDANCE_STORAGE_KEY);
-//   const isAttendanceCompletedToday = savedAttendanceDate === todayKey;
+  const { user } = useAuth();
+  const userId = user?.id ?? 'guest';
+
+  const ATTENDANCE_STORAGE_KEY = `attendanceCheckedDate:${userId}`;// storage key 추가
+  const ATTENDANCE_STREAK_KEY = `attendanceStreak:${userId}`; // 연속 출석체크 검사 - api 로 따로 만들어도 됨
+
+  const DAILY_DRAW_CLAIM_KEY = `dailyDrawClaimDate:${userId}`;
+  const FIRST_DRAW_CLAIM_KEY = `firstDrawClaimed:${userId}`;
+
   const [attendanceCompletedToday, setAttendanceCompletedToday] = useState(false);
 
-  const [userTickets] = useState(120);
+  const [userTickets, setUserTickets] = useState(0);
   const [consecutiveDays, setConsecutiveDays] = useState(0);
 
   const [missions, setMissions] = useState<Mission[]>([
@@ -177,7 +184,32 @@ export function MissionsPage() {
 
     setAttendanceCompletedToday(completedToday);
     setConsecutiveDays(nextStreak);
-  }, []);
+
+    const dailyDrawClaimDate = localStorage.getItem(DAILY_DRAW_CLAIM_KEY);
+      const firstDrawClaimed = localStorage.getItem(FIRST_DRAW_CLAIM_KEY) === 'true';
+
+      setMissions((prev) =>
+        prev.map((m) => {
+          if (m.id === 3) {
+            return { ...m, completed: dailyDrawClaimDate === todayKey };
+          }
+          if (m.id === 8) {
+            return { ...m, completed: firstDrawClaimed };
+          }
+          return m;
+        })
+      );
+
+    if (user?.id) {
+          getTicketWallet(user.id)
+            .then((data) => {
+              setUserTickets(data.balance ?? 0);
+            })
+            .catch((err) => {
+              console.error('티켓 잔액 조회 실패:', err);
+            });
+        }
+  }, [userId]);
 
 /*
   const handleClaimReward = (missionId: number) => {
@@ -258,6 +290,8 @@ const handleClaimReward = async (missionId: number) => {
       try {
         await apiClient.post('/api/missions/draw/daily/claim');
 
+        localStorage.setItem(DAILY_DRAW_CLAIM_KEY, getTodayKey());
+
         toast.success(`${mission.reward} 티켓을 받았습니다!`);
 
         setMissions((prev) =>
@@ -270,6 +304,17 @@ const handleClaimReward = async (missionId: number) => {
 
         const message =
           err?.response?.data?.message || '드로우 응모 미션 처리 중 오류가 발생했습니다.';
+
+        if (message.includes('이미 보상을 받았습니다')) {
+          localStorage.setItem(DAILY_DRAW_CLAIM_KEY, getTodayKey());
+
+          setMissions((prev) =>
+            prev.map((m) =>
+              m.id === missionId ? { ...m, completed: true } : m
+            )
+          );
+        }
+
         toast.error(message);
       }
 
@@ -280,6 +325,8 @@ const handleClaimReward = async (missionId: number) => {
      if (missionId === 8) {
        try {
          await apiClient.post('/api/missions/draw/first/claim');
+
+         localStorage.setItem(FIRST_DRAW_CLAIM_KEY, 'true');
 
          toast.success(`${mission.reward} 티켓을 받았습니다!`);
 
@@ -293,6 +340,17 @@ const handleClaimReward = async (missionId: number) => {
 
          const message =
            err?.response?.data?.message || '럭키드로우 체험 미션 처리 중 오류가 발생했습니다.';
+
+         if (message.includes('이미 보상을 받았습니다')) {
+           localStorage.setItem(FIRST_DRAW_CLAIM_KEY, 'true');
+
+           setMissions((prev) =>
+             prev.map((m) =>
+               m.id === missionId ? { ...m, completed: true } : m
+             )
+           );
+         }
+
          toast.error(message);
        }
 
