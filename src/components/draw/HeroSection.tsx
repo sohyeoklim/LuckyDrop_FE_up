@@ -1,8 +1,9 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Slider from "react-slick";
 import { Heart, Clock, Ticket } from "lucide-react";
 import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
 import { getImageUrl } from "@/utils/image";
+import { useLoginRequired } from "@/components/providers/LoginRequiredProvider";
 import toast from "react-hot-toast";
 import axios from "axios";
 
@@ -38,6 +39,8 @@ function getTimeLeft(endAt: string) {
 }
 
 export function HeroSection({ draw, userTickets }: HeroSectionProps) {
+  const navigate = useNavigate();
+  const { requireLogin } = useLoginRequired();
   const { mutate: toggleBookmark, isPending } = useToggleDrawBookmark();
 
   const sliderSettings = {
@@ -58,10 +61,23 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
   };
 
   const timeLeft = getTimeLeft(draw.endAt);
+
   const imageList =
-  draw.images && draw.images.length > 0
-    ? draw.images.map((img) => getImageUrl(img))
-    : ["/placeholder.png"];
+    draw.images && draw.images.length > 0
+      ? draw.images.map((img) => getImageUrl(img))
+      : ["/placeholder.png"];
+
+  const detailPath = `/draws/${draw.drawId}`;
+
+  const handleGoDetail = () => {
+    if (!requireLogin(detailPath)) return;
+    navigate(detailPath);
+  };
+
+  const handleEntry = () => {
+    if (!requireLogin(detailPath)) return;
+    navigate(detailPath);
+  };
 
   const handleLike = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -87,7 +103,7 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
           console.error(error);
 
           if (axios.isAxiosError(error) && error.response?.status === 401) {
-            toast.error("로그인이 필요한 서비스입니다.");
+            requireLogin(detailPath);
             return;
           }
 
@@ -142,7 +158,7 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
 
           {draw.reason && (
             <p className="text-sm text-pink-500 font-medium mb-2">
-            {reasonTextMap[draw.reason] ?? draw.reason}
+              {reasonTextMap[draw.reason] ?? draw.reason}
             </p>
           )}
 
@@ -175,21 +191,18 @@ export function HeroSection({ draw, userTickets }: HeroSectionProps) {
           </div>
 
           <div className="flex items-center gap-4">
-            <Link
-              to={`/draws/${draw.drawId}`}
-              className={`flex-1 px-8 py-4 rounded-xl font-bold text-white text-lg shadow-lg transition-all hover:scale-105 text-center ${
+            <button
+              type="button"
+              onClick={handleEntry}
+              disabled={userTickets < draw.ticketCostEntry}
+              className={`flex-1 px-8 py-4 rounded-xl font-bold text-white text-lg shadow-lg transition-all text-center ${
                 userTickets < draw.ticketCostEntry
-                  ? "bg-gray-400 cursor-not-allowed pointer-events-none"
-                  : "bg-gradient-to-r from-purple-600 to-pink-600 hover:shadow-xl"
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-purple-600 to-pink-600 hover:scale-105 hover:shadow-xl"
               }`}
             >
               지금 응모하기
-            </Link>
-
-            <div className="text-sm text-gray-600">
-              보유 티켓:{" "}
-              <span className="font-bold text-purple-600">{userTickets}장</span>
-            </div>
+            </button>
           </div>
         </div>
       </div>

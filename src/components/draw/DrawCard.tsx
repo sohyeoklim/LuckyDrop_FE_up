@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Heart, Clock, Users, Ticket } from "lucide-react";
 import toast from "react-hot-toast";
 import axios from "axios";
@@ -7,40 +7,57 @@ import type { DrawCardResponse } from "../../types/draw";
 import { getDrawTimeText, getDrawStatusStyle } from "../../utils/draw";
 import { getImageUrl } from "../../utils/image";
 import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
+import { useLoginRequired } from "@/components/providers/LoginRequiredProvider";
 
 interface DrawCardProps {
   draw: DrawCardResponse;
 }
 
 export function DrawCard({ draw }: DrawCardProps) {
+  const navigate = useNavigate();
+  const { requireLogin } = useLoginRequired();
   const { mutate: toggleBookmark, isPending } = useToggleDrawBookmark();
 
+  const detailPath = `/draws/${draw.drawId}`;
+
+  const handleCardClick = () => {
+    if (!requireLogin(detailPath)) return;
+    navigate(detailPath);
+  };
+
+  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleCardClick();
+    }
+  };
+
   const handleLike = (e: React.MouseEvent<HTMLButtonElement>) => {
-  e.preventDefault();
-  e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
 
-  if (isPending) return;
+    if (isPending) return;
 
-  const nextBookmarked = !draw.isBookmarked;
+    const nextBookmarked = !draw.isBookmarked;
 
-  toggleBookmark(
-    {
-      drawId: draw.drawId,
-      nextBookmarked,
-    },
-    {
-      onSuccess: () => {
-        toast.success(nextBookmarked ? "북마크 추가" : "북마크 해제");
+    toggleBookmark(
+      {
+        drawId: draw.drawId,
+        nextBookmarked,
       },
-      onError: (error) => {
-        console.error(error);
+      {
+        onSuccess: () => {
+          toast.success(nextBookmarked ? "북마크 추가" : "북마크 해제");
+        },
+        onError: (error) => {
+          console.error(error);
 
-        if (axios.isAxiosError(error) && error.response?.status === 401) {
-          toast.error("로그인이 필요한 서비스입니다.");
-          return;
-        }
+          if (axios.isAxiosError(error) && error.response?.status === 401) {
+            requireLogin(detailPath);
+            return;
+          }
 
-        toast.error("북마크 처리 실패");
+          toast.error("북마크 처리 실패");
         },
       }
     );
@@ -54,9 +71,12 @@ export function DrawCard({ draw }: DrawCardProps) {
   );
 
   return (
-    <Link
-      to={`/draws/${draw.drawId}`}
-      className="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1 group block"
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      className="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1 group block cursor-pointer"
     >
       <div className="relative">
         <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
@@ -126,6 +146,6 @@ export function DrawCard({ draw }: DrawCardProps) {
           </div>
         </div>
       </div>
-    </Link>
+    </div>
   );
 }

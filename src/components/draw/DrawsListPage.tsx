@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useLoginRequired } from "@/components/providers/LoginRequiredProvider";
 import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
 import toast from "react-hot-toast";
 import axios from "axios";
@@ -223,9 +224,17 @@ export function DrawsListPage() {
 }
 
 function DrawListCardItem({ draw }: { draw: DrawCardResponse }) {
+  const navigate = useNavigate();
+  const { requireLogin } = useLoginRequired();
   const { mutate: toggleBookmark, isPending } = useToggleDrawBookmark();
 
-  const open = isOpenDraw(draw.status, draw.startAt, draw.endAt);
+  const detailPath = `/draws/${draw.drawId}`;
+
+  const handleCardClick = () => {
+    if (!requireLogin(detailPath)) return;
+    navigate(detailPath);
+  };
+
   const timeLeftText = getDrawTimeText(draw.status, draw.startAt, draw.endAt);
   const { label, className } = getDrawStatusStyle(
     draw.status,
@@ -265,78 +274,85 @@ function DrawListCardItem({ draw }: { draw: DrawCardResponse }) {
   };
 
   return (
-    <Link
-      to={`/draws/${draw.drawId}`}
-      className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow group"
-    >
-      <div className="relative">
-        <img
-          src={getImageUrl(draw.imageUrl)}
-          alt={draw.title}
-          className={`w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300 
-          }`}
-          onError={(e) => {
-            const target = e.currentTarget;
-            if (!target.src.includes("/placeholder.png")) {
-              target.src = "/placeholder.png";
-            }
-          }}
-        />
+  <div
+    role="button"
+    tabIndex={0}
+    onClick={handleCardClick}
+    onKeyDown={(e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleCardClick();
+      }
+    }}
+    className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow group cursor-pointer"
+  >
+    <div className="relative">
+      <img
+        src={getImageUrl(draw.imageUrl)}
+        alt={draw.title}
+        className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+        onError={(e) => {
+          const target = e.currentTarget;
+          if (!target.src.includes("/placeholder.png")) {
+            target.src = "/placeholder.png";
+          }
+        }}
+      />
 
-        <button
-          type="button"
-          onClick={handleBookmark}
-          disabled={isPending}
-          className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-          <Heart
-            className={`w-4 h-4 ${
+      <button
+        type="button"
+        onClick={handleBookmark}
+        disabled={isPending}
+        className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Heart
+          className={`w-4 h-4 ${
             draw.isBookmarked ? "fill-red-500 text-red-500" : "text-gray-400"
-           }`}
-          />
-          <span className="text-xs font-semibold text-gray-800">
-            {draw.bookmarkCount}
-          </span>
-        </button>
+          }`}
+        />
+        <span className="text-xs font-semibold text-gray-800">
+          {draw.bookmarkCount}
+        </span>
+      </button>
 
-        <div className="absolute bottom-3 left-3">
-          <span
-            className={`px-3 py-1 rounded-full text-xs font-medium ${className}`}
-          >
-            {label}
-          </span>
-        </div>
+      <div className="absolute bottom-3 left-3">
+        <span
+          className={`px-3 py-1 rounded-full text-xs font-medium ${className}`}
+        >
+          {label}
+        </span>
       </div>
+    </div>
 
-      <div className="p-4">
-        <h3 className="font-bold text-gray-900 mb-1 line-clamp-1">
-          {draw.title}
-        </h3>
-        <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-          {draw.productName || "드로우 상품"}
-        </p>
+    <div className="p-4">
+      <h3 className="font-bold text-gray-900 mb-1 line-clamp-1">
+        {draw.title}
+      </h3>
+      <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+        {draw.productName || "드로우 상품"}
+      </p>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-1 text-gray-600">
-              <Clock className="w-4 h-4" />
-              <span>{timeLeftText}</span>
-            </div>
-
-            <div className="flex items-center gap-1 text-purple-600 font-medium">
-              <Ticket className="w-4 h-4" />
-              <span>{draw.ticketCostEntry}T</span>
-            </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-1 text-gray-600">
+            <Clock className="w-4 h-4" />
+            <span>{timeLeftText}</span>
           </div>
 
-          <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200">
-            <div className="flex items-center gap-1 text-gray-600">
-              <Users className="w-4 h-4" />
-              <span>{draw.participantCount}명 응모</span>
-            </div>
+          <div className="flex items-center gap-1 text-purple-600 font-medium">
+            <Ticket className="w-4 h-4" />
+            <span>{draw.ticketCostEntry}T</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200">
+          <div className="flex items-center gap-1 text-gray-600">
+            <Users className="w-4 h-4" />
+            <span>{draw.participantCount}명 응모</span>
           </div>
         </div>
       </div>
-    </Link>
-  );
+    </div>
+  </div>
+);
 }
