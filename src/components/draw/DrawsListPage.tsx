@@ -4,6 +4,7 @@ import { useLoginRequired } from "@/components/providers/LoginRequiredProvider";
 import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
 import toast from "react-hot-toast";
 import axios from "axios";
+import { useDrawStats } from "@/hooks/useDrawStats";
 import {
   ArrowLeft,
   Search,
@@ -13,6 +14,7 @@ import {
   Heart,
   Users,
   TrendingUp,
+  Zap
 } from "lucide-react";
 import { useDrawList } from "@/hooks/useDrawList";
 import type { DrawSort } from "@/api/draw";
@@ -58,6 +60,8 @@ export function DrawsListPage() {
 
   const draws = data?.content ?? [];
 
+  const { data: statsData } = useDrawStats();
+
   const filteredDraws = useMemo(() => {
     const keyword = searchQuery.toLowerCase().trim();
 
@@ -95,16 +99,6 @@ export function DrawsListPage() {
     return result;
   }, [draws, searchQuery, showOnlyOpen, sortOption]);
 
-  const stats = useMemo(() => {
-    return {
-      total: draws.length,
-      open: draws.filter((draw) =>
-        isOpenDraw(draw.status, draw.startAt, draw.endAt)
-      ).length,
-      totalLikes: draws.reduce((sum, draw) => sum + draw.bookmarkCount, 0),
-    };
-  }, [draws]);
-
   if (isLoading) {
     return <div className="min-h-screen bg-gray-50 p-10">로딩중...</div>;
   }
@@ -138,7 +132,9 @@ export function DrawsListPage() {
               <TrendingUp className="w-5 h-5 text-purple-600" />
               <p className="text-sm text-gray-600">전체 드로우</p>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{stats.total}개</p>
+            <p className="text-2xl font-bold text-gray-900">
+              {statsData?.totalDrawCount ?? 0}개
+            </p>
           </div>
 
           <div className="bg-white rounded-xl p-4 shadow-lg">
@@ -146,16 +142,18 @@ export function DrawsListPage() {
               <Clock className="w-5 h-5 text-green-600" />
               <p className="text-sm text-gray-600">진행중</p>
             </div>
-            <p className="text-2xl font-bold text-green-600">{stats.open}개</p>
+            <p className="text-2xl font-bold text-green-600">
+              {statsData?.activeDrawCount ?? 0}개
+            </p>
           </div>
 
           <div className="bg-white rounded-xl p-4 shadow-lg">
             <div className="flex items-center gap-2 mb-2">
-              <Heart className="w-5 h-5 text-red-600" />
-              <p className="text-sm text-gray-600">총 찜</p>
+              <Zap className="w-5 h-5 text-orange-500" />
+              <p className="text-sm text-gray-600">총 응모자 수</p>
             </div>
-            <p className="text-2xl font-bold text-red-600">
-              {stats.totalLikes}
+            <p className="text-2xl font-bold text-orange-600">
+              {statsData?.totalEntryCount ?? 0}회
             </p>
           </div>
         </div>

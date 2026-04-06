@@ -16,8 +16,6 @@ export function MainPage() {
 
   const {
     data: hotBanner,
-    isLoading: hotBannerLoading,
-    isError: isHotBannerError,
   } = useHotBanner();
 
   const {
@@ -33,28 +31,11 @@ export function MainPage() {
       <TopAppBar />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {hotBannerLoading && (
-          <div className="rounded-2xl bg-white p-8 shadow-lg">
-            <p className="text-gray-500">핫 배너 불러오는 중...</p>
-          </div>
-        )}
-
-        {!hotBannerLoading && isHotBannerError && (
-          <div className="rounded-2xl bg-white p-8 shadow-lg">
-            <p className="text-red-500">핫 배너를 불러오지 못했습니다.</p>
-          </div>
-        )}
-
-        {!hotBannerLoading && !isHotBannerError && hotBanner?.drawId ? (
-          <HeroSection draw={hotBanner} userTickets={userTickets} />
-      ) : (
-        !hotBannerLoading &&
-        !isHotBannerError && (
-          <div className="rounded-2xl bg-white p-8 shadow-lg">
-            <p className="text-gray-500">현재 진행 중인 핫 이벤트가 없습니다.</p>
-          </div>
-        )
-      )}
+    
+      <HeroSection
+        draw={hotBanner?.drawId ? hotBanner : undefined}
+        userTickets={userTickets}
+      />
 
         <section className="mt-12">
           <div className="mb-6 flex items-center justify-between">

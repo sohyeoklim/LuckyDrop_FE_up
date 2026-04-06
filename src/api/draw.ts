@@ -22,6 +22,12 @@ export interface HotBannerResponse {
   startAt: string;
 }
 
+export interface DrawStatsResponse {
+  totalDrawCount: number;
+  activeDrawCount: number;
+  totalEntryCount: number;
+}
+
 export interface GetDrawCardParams {
   tab?: DrawTab;
   sort?: DrawSort;
@@ -32,6 +38,11 @@ export interface GetDrawCardParams {
 export async function getDrawWinners(drawId: number): Promise<DrawWinnerResponse> {
   const response = await api.get(`/api/draws/${drawId}/winners`);
   return response.data;
+}
+
+export async function getDrawStats(): Promise<DrawStatsResponse> {
+  const { data } = await api.get("/api/draws/stats");
+  return data;
 }
 
 export async function getDraws(params: GetDrawCardParams) {
