@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, User as UserIcon, Phone, MapPin, Mail, IdCard, Shield, Edit2, Check, X, Home, Search, Users, Copy } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, Phone, MapPin, Mail, IdCard, Shield, Edit2, Check, X, Home, Search, Users, Copy, Link2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import apiClient from '../api/client';
 import toast from 'react-hot-toast';
@@ -20,6 +20,7 @@ interface User {
   address?: string;
   invitationCode?: string;
   referredByCode?: string;
+  googleLinked?: boolean;
 }
 
 interface EditingState {
@@ -44,6 +45,14 @@ interface Errors {
   nickname?: string;
   phone?: string;
 }
+
+const formatPhoneNumber = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+};
 
 export function EditProfile() {
   const navigate = useNavigate();
@@ -70,6 +79,18 @@ export function EditProfile() {
   const [errors, setErrors] = useState<Errors>({});
   const [savingField, setSavingField] = useState<string | null>(null);
 
+  const startGoogleLink = async () => {
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+    try {
+      const response = await apiClient.post('/api/user/google/link', null, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      window.location.assign(`${apiBaseUrl}${response.data.authorizationUrl}`);
+    } catch {
+      toast.error('Google 계정 연동을 시작하지 못했습니다. 다시 로그인해주세요.');
+    }
+  };
+
   useEffect(() => {
     // 페이지 진입 시 최신 사용자 정보를 가져옵니다.
     fetchUserDetails();
@@ -79,7 +100,7 @@ export function EditProfile() {
     if (user) {
       setFormData({
         nickname: user.nickname || '',
-        phone: user.phone || '',
+        phone: formatPhoneNumber(user.phone || ''),
         address: user.address || '',
       });
 
@@ -103,6 +124,19 @@ export function EditProfile() {
     }
   }, [user]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('googleLinked') === 'true') {
+      toast.success('Google 계정이 연결되었습니다.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    const error = params.get('googleLinkError');
+    if (error) {
+      toast.error(error);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   if (isLoading) {
     return <div className="min-h-screen bg-gray-50"></div>;
   }
@@ -123,7 +157,9 @@ export function EditProfile() {
     if (user) {
       setFormData(prev => ({
         ...prev,
-        [field]: (user as any)[field] || '',
+        [field]: field === 'phone'
+          ? formatPhoneNumber((user as any)[field] || '')
+          : (user as any)[field] || '',
       }));
 
       // 주소 취소 시 원래 주소 데이터로 복원
@@ -306,6 +342,34 @@ export function EditProfile() {
             </div>
           </div>
 
+          {/* Google 계정 연동 */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Google 계정
+            </label>
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div>
+                <p className="font-medium text-gray-800">
+                  {user.googleLinked ? 'Google 계정 연결됨' : 'Google 계정을 연결해 간편하게 로그인하세요'}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  연결한 Google 계정으로도 현재 LuckyDrop 계정에 로그인할 수 있습니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={startGoogleLink}
+                disabled={user.googleLinked}
+                className="shrink-0 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+              >
+                <span className="flex items-center gap-2">
+                  <Link2 className="h-4 w-4" />
+                  {user.googleLinked ? '연결 완료' : 'Google 연동'}
+                </span>
+              </button>
+            </div>
+          </div>
+
           {/* 3. 닉네임 (수정 가능) */}
           <div className="mb-6">
             <label htmlFor="nickname" className="block text-sm font-medium text-gray-700 mb-2">
@@ -385,7 +449,9 @@ export function EditProfile() {
                   id="phone"
                   name="phone"
                   value={formData.phone}
-                  onChange={(e) => handleChange('phone', e.target.value)}
+                  onChange={(e) => handleChange('phone', formatPhoneNumber(e.target.value))}
+                  inputMode="numeric"
+                  maxLength={13}
                   disabled={!editing.phone}
                   className={`w-full pl-10 pr-4 py-3 border ${
                     errors.phone ? 'border-red-500' : editing.phone ? 'border-purple-500' : 'border-gray-200'

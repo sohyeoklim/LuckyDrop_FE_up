@@ -1,4 +1,4 @@
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect, useRef, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { getTicketWallet, getTicketLedger } from '../api/client';
 import { format } from 'date-fns';
+import { InfiniteScrollTrigger } from './common/InfiniteScrollTrigger';
 
 type TicketType = 'EARN' | 'USE' | 'REFUND' | 'ADJUST';
 
@@ -30,6 +31,14 @@ interface Wallet {
   balance: number;
   totalEarned: number;
   totalSpent: number;
+}
+
+interface LedgerPage {
+  content: LedgerEntry[];
+  totalPages: number;
+  totalElements: number;
+  number: number;
+  last: boolean;
 }
 
 // 타입 -> 한글 라벨 매핑
@@ -65,51 +74,52 @@ export function MyTicketsPage() {
 
   const [filterType, setFilterType] = useState<'all' | TicketType>('all');
   const [filterMonth, setFilterMonth] = useState('all');
+  const [nextPage, setNextPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const initialLoadStarted = useRef(false);
+  const pageSize = 20;
+
+  const withBalances = (ledger: LedgerEntry[], walletData: Wallet): TicketTransaction[] => {
+    let runningBalance = walletData.balance;
+    return [...ledger]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((tx) => {
+        const transaction = { ...tx, balanceAfter: runningBalance };
+        runningBalance -= tx.amount * getAmountSign(tx.type);
+        return transaction;
+      });
+  };
+
+  const loadLedger = async (reset = false) => {
+    if (loadingMore || (!reset && !hasMore)) return;
+    if (reset) setIsLoading(true); else setLoadingMore(true);
+    setError(null);
+    try {
+      const pageToLoad = reset ? 0 : nextPage;
+      const [walletData, ledgerData]: [Wallet, LedgerPage] = await Promise.all([
+        reset || !wallet ? getTicketWallet() : Promise.resolve(wallet),
+        getTicketLedger(pageToLoad, pageSize),
+      ]);
+      if (reset) setWallet(walletData);
+      setTransactions((previous) => withBalances(reset ? ledgerData.content ?? [] : [...previous, ...(ledgerData.content ?? [])], walletData));
+      setNextPage(pageToLoad + 1);
+      setHasMore(!ledgerData.last);
+    } catch (err) {
+      setError('데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
-    const fetchData = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const [walletData, ledgerData]: [Wallet, LedgerEntry[]] = await Promise.all([
-          getTicketWallet(user.id),
-          getTicketLedger(user.id),
-        ]);
-
-        setWallet(walletData);
-
-        // balanceAfter 계산: 최신 거래부터 거꾸로 계산
-        let runningBalance = walletData.balance;
-        const sortedLedger = [...ledgerData].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-
-        const transactionsWithBalance: TicketTransaction[] = sortedLedger.map((tx) => {
-          const signedAmount = tx.amount * getAmountSign(tx.type);
-          const txWithBalance: TicketTransaction = {
-            ...tx,
-            balanceAfter: runningBalance,
-          };
-          runningBalance -= signedAmount; // 과거 거래 되돌리기
-          return txWithBalance;
-        }).reverse(); // 오래된 순으로 재정렬
-
-        setTransactions(transactionsWithBalance);
-      } catch (err) {
-        setError('데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.');
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [user, navigate]);
+    if (!user) { navigate('/login'); return; }
+    if (initialLoadStarted.current) return;
+    initialLoadStarted.current = true;
+    void loadLedger(true);
+  }, [user]);
 
   // 필터링
   const filteredTransactions = transactions.filter((transaction) => {
@@ -225,6 +235,16 @@ export function MyTicketsPage() {
           </div>
         </div>
 
+        <div className="mb-8 bg-purple-50 rounded-xl p-6">
+          <h3 className="font-bold text-gray-900 mb-3">티켓 획득 방법</h3>
+          <ul className="space-y-2 text-sm text-gray-600">
+            <li className="flex items-start gap-2"><span className="text-purple-600 font-bold">•</span><span>매일 출석 체크하고 티켓 받기</span></li>
+            <li className="flex items-start gap-2"><span className="text-purple-600 font-bold">•</span><span>광고 시청으로 추가 티켓 획득</span></li>
+            <li className="flex items-start gap-2"><span className="text-purple-600 font-bold">•</span><span>친구 초대 시 보너스 티켓 지급</span></li>
+            <li className="flex items-start gap-2"><span className="text-purple-600 font-bold">•</span><span>이벤트 미션 완료로 대량 티켓 획득</span></li>
+          </ul>
+        </div>
+
         {/* 필터 */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -320,28 +340,8 @@ export function MyTicketsPage() {
           )}
         </div>
 
-        {/* 안내 메시지 */}
-        <div className="mt-8 bg-purple-50 rounded-xl p-6">
-          <h3 className="font-bold text-gray-900 mb-3">티켓 획득 방법</h3>
-          <ul className="space-y-2 text-sm text-gray-600">
-            <li className="flex items-start gap-2">
-              <span className="text-purple-600 font-bold">•</span>
-              <span>매일 출석 체크하고 티켓 받기</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-purple-600 font-bold">•</span>
-              <span>광고 시청으로 추가 티켓 획득</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-purple-600 font-bold">•</span>
-              <span>친구 초대 시 보너스 티켓 지급</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-purple-600 font-bold">•</span>
-              <span>이벤트 미션 완료로 대량 티켓 획득</span>
-            </li>
-          </ul>
-        </div>
+        {transactions.length > 0 && <InfiniteScrollTrigger hasMore={hasMore} isLoading={loadingMore} onLoadMore={() => void loadLedger()} />}
+
       </main>
     </div>
   );

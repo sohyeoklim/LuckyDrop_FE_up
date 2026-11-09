@@ -90,12 +90,15 @@ export function getDrawStatusStyle(
 export const getDrawTimeText = (
   status: DrawStatus,
   startAt: string,
-  endAt: string
+  endAt: string,
+  now = Date.now()
 ) => {
-  const now = Date.now();
   const displayState = getDrawDisplayState(status, startAt, endAt);
 
   if (displayState === "BEFORE_START") {
+    const diff = new Date(startAt).getTime() - now;
+    if (diff > 0) return `시작까지 ${formatDiff(diff)}`;
+    return "응모 시작 처리 중";
     return "시작 전";
   }
 

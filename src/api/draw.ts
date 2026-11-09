@@ -1,7 +1,7 @@
 import { api } from "@/lib/axios";
 import type { DrawCardResponse, PageResponse, DrawDetailResponse, DrawWinnerResponse  } from "@/types/draw";
 
-export type DrawTab = "ALL" | "UPCOMING" | "ONGOING" | "CLOSED";
+export type DrawTab = "ALL" | "OPEN" | "UPCOMING" | "ONGOING" | "CLOSED";
 export type DrawSort =
   | "LATEST"
   | "BOOKMARK"

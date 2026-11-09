@@ -6,6 +6,9 @@ import { fetchMyLikedDraws, LikedDraw } from '../api/bookmark';
 import { format } from 'date-fns';
 import { useState, useEffect } from 'react';
 import apiClient from '../api/client';
+import { InfiniteScrollTrigger } from './common/InfiniteScrollTrigger';
+import type { HostWinnerInfoResponse } from '../types/draw';
+import { toast } from 'sonner';
 type TicketType = 'EARN' | 'USE' | 'REFUND' | 'ADJUST';
 
 interface LedgerEntry {
@@ -22,6 +25,22 @@ interface Wallet {
   totalSpent: number;
 }
 
+interface HostDraw {
+  drawId: number;
+  title: string;
+  status: string;
+  endAt: string;
+  shippable: boolean;
+  readyForFulfillment: boolean;
+}
+
+type DeliveryForm = {
+  deliveryCarrier: string;
+  trackingNumber: string;
+};
+
+const deliveryCarriers = ['CJ대한통운', '우체국택배', '한진택배', '롯데택배', '로젠택배', '기타'];
+
 type EntryStatus = 'OPEN' | 'LOCKED' | 'DRAWING' | 'DONE' | 'WON' | 'LOST';
 
 interface RecentEntry {
@@ -31,6 +50,7 @@ interface RecentEntry {
   entryDate: string;
   ticketUsed: number;
   status: EntryStatus;
+  isWinner: boolean;
 }
 
 const typeLabelMap: Record<TicketType, string> = {
@@ -110,6 +130,16 @@ export function MyPage() {
   const [ticketHistory, setTicketHistory] = useState<LedgerEntry[]>([]);
   const [recentEntries, setRecentEntries] = useState<RecentEntry[]>([]);
   const [likedDraws, setLikedDraws] = useState<LikedDraw[]>([]);
+  const [hostDraws, setHostDraws] = useState<HostDraw[]>([]);
+  const [hostDrawNextPage, setHostDrawNextPage] = useState(1);
+  const [hasMoreHostDraws, setHasMoreHostDraws] = useState(false);
+  const [loadingMoreHostDraws, setLoadingMoreHostDraws] = useState(false);
+  const [fulfillmentDraw, setFulfillmentDraw] = useState<HostDraw | null>(null);
+  const [fulfillmentWinners, setFulfillmentWinners] = useState<HostWinnerInfoResponse[]>([]);
+  const [fulfillmentForms, setFulfillmentForms] = useState<Record<number, DeliveryForm>>({});
+  const [fulfillmentLoading, setFulfillmentLoading] = useState(false);
+  const [fulfillmentError, setFulfillmentError] = useState<string | null>(null);
+  const [submittingWinnerId, setSubmittingWinnerId] = useState<number | null>(null);
   const [apiLoading, setApiLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -123,16 +153,23 @@ export function MyPage() {
       });
       
       // ✅ 백엔드 → 프론트엔드 데이터 변환 (이미지/상태 처리)
-      const transformedEntries = (data.content || []).map((item: any) => ({
-        drawId: item.drawId,
-        drawTitle: item.drawTitle,
-        drawImage: item.drawImage && item.drawImage !== '' && item.drawImage !== '/images/default-draw.jpg'
-          ? `http://localhost:8080${item.drawImage}`
-          : '/placeholder.jpg',
-        entryDate: item.entryDate,
-        ticketUsed: Math.abs(item.ticketUsed || 0),
-        status: mapBackendStatus(item.status),
-      }));
+      const transformedEntries: RecentEntry[] = (data.content || []).map((item: any) => {
+        const resultRevealed = item.status === 'CLOSE';
+        const isWinner = Number(item.isWinner) === 1;
+
+        return {
+          drawId: item.drawId,
+          drawTitle: item.drawTitle,
+          drawImage: item.drawImage && item.drawImage !== '' && item.drawImage !== '/images/default-draw.jpg'
+            ? `http://localhost:8080${item.drawImage}`
+            : '/placeholder.jpg',
+          entryDate: item.entryDate,
+          ticketUsed: Math.abs(item.ticketUsed || 0),
+          // 추첨 결과가 공개되면, 드로우 상태 대신 이 사용자의 당첨 결과를 보여준다.
+          status: resultRevealed ? (isWinner ? 'WON' : 'LOST') : mapBackendStatus(item.status),
+          isWinner,
+        };
+      });
       
       setRecentEntries(transformedEntries);
     } catch (error) {
@@ -158,19 +195,41 @@ export function MyPage() {
       setApiError(null);
       try {
         const [walletData, ledgerData, likedRes] = await Promise.all([
-          getTicketWallet(user.id.toString()),
-          getTicketLedger(user.id.toString()),
-          fetchMyLikedDraws(0, 2), // ✅ 실제 API 호출
+          getTicketWallet().catch((error) => {
+            console.error('티켓 지갑 조회 실패:', error);
+            return null;
+          }),
+          getTicketLedger(0, 4).catch((error) => {
+            console.error('티켓 내역 조회 실패:', error);
+            return { content: [] };
+          }),
+          fetchMyLikedDraws(0, 2).catch((error) => {
+            console.error('찜 목록 조회 실패:', error);
+            return { items: [], page: 0, totalPages: 0 };
+          }),
         ]);
 
         setWallet(walletData);
         
-        const recentLedger = ledgerData
+        const recentLedger = (Array.isArray(ledgerData) ? ledgerData : (ledgerData.content ?? []))
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .slice(0, 4);
         setTicketHistory(recentLedger);
 
         setLikedDraws(likedRes.items); // ✅ 실제 찜 데이터 설정
+
+        if (user.role === 'HOST' || user.role === 'ADMIN') {
+          try {
+            const { data: createdDraws } = await apiClient.get<{ content: HostDraw[]; totalPages: number }>('/api/host/draws', {
+              params: { page: 0, size: 10 },
+            });
+            setHostDraws(createdDraws.content ?? []);
+            setHostDrawNextPage(1);
+            setHasMoreHostDraws((createdDraws.totalPages ?? 0) > 1);
+          } catch (error) {
+            console.error('개설 드로우 조회 실패:', error);
+          }
+        }
 
         await fetchRecentEntries();
       } catch (err) {
@@ -183,6 +242,73 @@ export function MyPage() {
 
     fetchData();
   }, [user]);
+
+  const loadMoreHostDraws = async () => {
+    if (loadingMoreHostDraws || !hasMoreHostDraws) return;
+    setLoadingMoreHostDraws(true);
+    try {
+      const { data } = await apiClient.get<{ content: HostDraw[]; totalPages: number }>('/api/host/draws', {
+        params: { page: hostDrawNextPage, size: 10 },
+      });
+      setHostDraws((previous) => [...previous, ...(data.content ?? [])]);
+      setHostDrawNextPage((page) => page + 1);
+      setHasMoreHostDraws(hostDrawNextPage + 1 < (data.totalPages ?? 0));
+    } catch (error) {
+      console.error('개설 드로우 추가 조회 실패:', error);
+    } finally {
+      setLoadingMoreHostDraws(false);
+    }
+  };
+
+  const openFulfillmentModal = async (draw: HostDraw) => {
+    setFulfillmentDraw(draw);
+    setFulfillmentWinners([]);
+    setFulfillmentForms({});
+    setFulfillmentError(null);
+    setFulfillmentLoading(true);
+
+    try {
+      const { data } = await apiClient.get<HostWinnerInfoResponse[]>(`/api/host/draws/${draw.drawId}/winners`);
+      setFulfillmentWinners(data ?? []);
+      setFulfillmentForms(Object.fromEntries((data ?? []).map((winner) => [winner.winnerId, {
+        deliveryCarrier: winner.deliveryCarrier ?? '',
+        trackingNumber: winner.trackingNumber ?? '',
+      }])));
+    } catch (error) {
+      console.error('당첨자 배송 정보 조회 실패:', error);
+      setFulfillmentError('당첨자 배송 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setFulfillmentLoading(false);
+    }
+  };
+
+  const completeFulfillment = async (winner: HostWinnerInfoResponse) => {
+    if (!fulfillmentDraw) return;
+    const form = fulfillmentForms[winner.winnerId];
+    if (!form?.deliveryCarrier || !form.trackingNumber.trim()) {
+      toast.error('택배사와 송장번호를 모두 입력해주세요.');
+      return;
+    }
+
+    setSubmittingWinnerId(winner.winnerId);
+    try {
+      await apiClient.patch(`/api/host/draws/${fulfillmentDraw.drawId}/winners/${winner.winnerId}/fulfillment`, {
+        status: 'COMPLETED',
+        note: '택배 발송 완료',
+        deliveryCarrier: form.deliveryCarrier,
+        trackingNumber: form.trackingNumber.trim(),
+      });
+      setFulfillmentWinners((current) => current.map((item) => item.winnerId === winner.winnerId
+        ? { ...item, fulfillmentStatus: 'COMPLETED', fulfillmentNote: '택배 발송 완료', deliveryCarrier: form.deliveryCarrier, trackingNumber: form.trackingNumber.trim() }
+        : item));
+      toast.success('택배사와 송장번호를 저장하고 당첨 처리를 완료했습니다.');
+    } catch (error) {
+      console.error('당첨 배송 처리 실패:', error);
+      toast.error('당첨 처리를 완료하지 못했습니다. 입력값을 확인해주세요.');
+    } finally {
+      setSubmittingWinnerId(null);
+    }
+  };
 
   if (authLoading || apiLoading) {
     return (
@@ -198,7 +324,7 @@ export function MyPage() {
 
   const handleLogout = async () => {
     try {
-      logout();
+      await logout();
       navigate('/login');
     } catch (error) {
       console.error('로그아웃 실패:', error);
@@ -379,6 +505,33 @@ export function MyPage() {
         </div>
 
         {/* 티켓 내역 */}
+        {isHost && (
+          <section className="mt-8">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900">내가 개설한 드로우</h2>
+              <span className="text-sm text-gray-500">당첨자 처리</span>
+            </div>
+            <div className="overflow-hidden rounded-2xl bg-white shadow-lg">
+              {hostDraws.length ? hostDraws.map((draw) => (
+                <div key={draw.drawId} className="flex items-center justify-between border-b border-gray-100 p-4">
+                  <div>
+                    <p className="font-semibold text-gray-900">{draw.title}</p>
+                    <p className="mt-1 text-sm text-gray-500">상태: {draw.status}</p>
+                  </div>
+                  {draw.shippable && draw.readyForFulfillment ? (
+                    <button type="button" onClick={() => void openFulfillmentModal(draw)} className="text-sm font-medium text-purple-600 hover:text-purple-700">
+                      당첨 처리하기 →
+                    </button>
+                  ) : (
+                    <span className="text-sm text-gray-400">{draw.shippable ? '배송 정보 제출 대기' : '비배송 보상 전달 대상 없음'}</span>
+                  )}
+                </div>
+              )) : <p className="p-8 text-center text-gray-500">개설한 드로우가 없습니다.</p>}
+            </div>
+            {hostDraws.length > 0 && <InfiniteScrollTrigger hasMore={hasMoreHostDraws} isLoading={loadingMoreHostDraws} onLoadMore={() => void loadMoreHostDraws()} />}
+          </section>
+        )}
+
         <section className="mt-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-gray-900">티켓 내역</h2>
@@ -433,6 +586,58 @@ export function MyPage() {
           </Link>
         </div>
       </main>
+
+      {fulfillmentDraw && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="당첨자 배송 처리">
+          <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+            <div className="flex items-start justify-between border-b px-5 py-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">당첨자 배송 처리</h3>
+                <p className="mt-1 text-sm text-gray-500">{fulfillmentDraw.title}</p>
+              </div>
+              <button type="button" onClick={() => setFulfillmentDraw(null)} className="rounded px-2 py-1 text-sm text-gray-500 hover:bg-gray-100">닫기</button>
+            </div>
+            <div className="overflow-y-auto p-5">
+              {fulfillmentLoading ? <p className="py-8 text-center text-sm text-gray-500">당첨자 정보를 불러오는 중...</p>
+                : fulfillmentError ? <p className="py-8 text-center text-sm text-red-600">{fulfillmentError}</p>
+                  : fulfillmentWinners.length === 0 ? <p className="py-8 text-center text-sm text-gray-500">당첨자가 없습니다.</p>
+                    : <div className="space-y-4">
+                      {fulfillmentWinners.map((winner) => {
+                        const editable = winner.fulfillmentStatus === 'ADDRESS_SUBMITTED' || winner.fulfillmentStatus === 'PROCESSING';
+                        const form = fulfillmentForms[winner.winnerId] ?? { deliveryCarrier: '', trackingNumber: '' };
+                        return (
+                          <section key={winner.winnerId} className="rounded-xl border border-gray-200 p-4">
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-semibold text-gray-900">{winner.nickname} <span className="text-sm font-normal text-gray-500">({winner.name})</span></p>
+                                <p className="mt-1 text-xs text-gray-500">{winner.fulfillmentStatus === 'COMPLETED' ? '발송 처리 완료' : editable ? '배송 정보 제출 완료' : '배송 정보 제출 대기'}</p>
+                              </div>
+                            </div>
+                            {editable || winner.fulfillmentStatus === 'COMPLETED' ? <>
+                              <dl className="mb-4 space-y-1 rounded-lg bg-gray-50 p-3 text-sm">
+                                <div><dt className="inline font-medium text-gray-700">연락처: </dt><dd className="inline break-all">{winner.phone || '-'}</dd></div>
+                                <div><dt className="inline font-medium text-gray-700">배송지: </dt><dd className="inline break-words">{winner.address || '-'}</dd></div>
+                              </dl>
+                              {editable ? <div className="grid gap-3 sm:grid-cols-[160px_1fr_auto]">
+                                <select value={form.deliveryCarrier} onChange={(event) => setFulfillmentForms((current) => ({ ...current, [winner.winnerId]: { ...form, deliveryCarrier: event.target.value } }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                                  <option value="">택배사 선택</option>
+                                  {deliveryCarriers.map((carrier) => <option key={carrier} value={carrier}>{carrier}</option>)}
+                                </select>
+                                <input value={form.trackingNumber} onChange={(event) => setFulfillmentForms((current) => ({ ...current, [winner.winnerId]: { ...form, trackingNumber: event.target.value } }))} onKeyDown={(event) => { if (event.key === 'Enter') event.preventDefault(); }} placeholder="송장번호 입력" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                                <button type="button" disabled={submittingWinnerId === winner.winnerId} onClick={() => void completeFulfillment(winner)} className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:bg-gray-400">
+                                  {submittingWinnerId === winner.winnerId ? '저장 중...' : '완료'}
+                                </button>
+                              </div> : <p className="text-sm text-gray-700">{winner.deliveryCarrier || '-'} · {winner.trackingNumber || '-'}</p>}
+                            </> : <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-500">당첨자가 배송 정보를 제출하면 이곳에서 택배사와 송장번호를 입력할 수 있습니다.</p>}
+                          </section>
+                        );
+                      })}
+                    </div>}
+            </div>
+            <div className="border-t p-4"><button type="button" onClick={() => setFulfillmentDraw(null)} className="w-full rounded-lg bg-gray-100 py-2 text-sm font-medium text-gray-700">닫기</button></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

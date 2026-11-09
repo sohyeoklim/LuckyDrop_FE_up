@@ -30,18 +30,30 @@ export interface DrawDetailResponse {
 
   isBookmarked: boolean;
   participantCount: number;
+  totalEntryCount: number;
   bookmarkCount: number;
 
   productName: string;
   brand: string;
   productDescription: string;
   price: number;
+  shippable: boolean;
   images: string[];
 
   endAtChanged: boolean;
 
   isEntered: boolean;
   entryCount: number;
+  verification?: DrawVerificationResponse;
+}
+
+export interface DrawVerificationResponse {
+  status: 'PENDING' | 'VERIFIED' | 'LEGACY';
+  algorithm?: string;
+  commitment?: string;
+  revealedCode?: string;
+  participantSnapshotHash?: string;
+  drawnAt?: string;
 }
 
 export type DrawWinnerItem = {
@@ -63,11 +75,41 @@ export interface PageResponse<T> {
 }
 
 export type HostWinnerInfoResponse = {
+  winnerId: number;
   winnerUserId: number;
   name: string;
   nickname: string;
   phone: string;
   address: string;
+  fulfillmentStatus: "ADDRESS_REQUIRED" | "ADDRESS_SUBMITTED" | "PENDING" | "PROCESSING" | "COMPLETED" | "EXPIRED" | "REWARD_PENDING" | "REWARD_DELIVERED";
+  fulfillmentNote?: string | null;
+  deliveryCarrier?: string | null;
+  trackingNumber?: string | null;
+  rewardTitle?: string | null;
+  rewardDeliveryType?: "CODE" | "MESSAGE" | "IMAGE" | null;
+  rewardDeliveredAt?: string | null;
+};
+
+export type MyDeliveryResponse = {
+  winnerId: number;
+  phone: string | null;
+  address: string | null;
+  addressDeadlineAt: string | null;
+  fulfillmentStatus: HostWinnerInfoResponse['fulfillmentStatus'];
+  deliveryCarrier?: string | null;
+  trackingNumber?: string | null;
+};
+
+export type MyRewardResponse = {
+  winnerId: number;
+  rewardId: number;
+  deliveryType: "CODE" | "MESSAGE" | "IMAGE";
+  title: string;
+  content: string | null;
+  imageAvailable: boolean;
+  deliveredAt: string;
+  confirmedAt: string | null;
+  fulfillmentStatus: HostWinnerInfoResponse['fulfillmentStatus'];
 };
 
 export interface DrawCreateRequest {
@@ -83,7 +125,6 @@ export interface DrawCreateRequest {
     brand: string;
     description?: string;
     retailPrice?: number;
-    shippable: boolean;
 
     images: {
       imageUrl: string;

@@ -1,34 +1,48 @@
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Heart, Clock, Ticket } from 'lucide-react';
 import { fetchMyLikedDraws, unlikeDraw, LikedDraw, DrawStatus } from '../api/bookmark';
+import { InfiniteScrollTrigger } from './common/InfiniteScrollTrigger';
 
 export function MyLikedPage() {
   const navigate = useNavigate();
   const [likedDraws, setLikedDraws] = useState<LikedDraw[]>([]);
-  const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
+  const [nextPage, setNextPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const initialLoadStarted = useRef(false);
 
-  useEffect(() => {
-    loadDraws();
-  }, [page]);
-
-  const loadDraws = async () => {
+  const loadDraws = useCallback(async (reset = false) => {
+    if (loadingMore || (!reset && !hasMore)) return;
     try {
-      setLoading(true);
+      if (reset) {
+        setLoading(true);
+        setNextPage(0);
+      } else {
+        setLoadingMore(true);
+      }
       setError(null);
-      const res = await fetchMyLikedDraws(page, 20);
-      setLikedDraws(res.items);
-      setTotalPages(res.totalPages);
+      const pageToLoad = reset ? 0 : nextPage;
+      const res = await fetchMyLikedDraws(pageToLoad, 20);
+      setLikedDraws((previous) => reset ? res.items : [...previous, ...res.items]);
+      setNextPage(pageToLoad + 1);
+      setHasMore(pageToLoad + 1 < res.totalPages);
     } catch (e) {
       setError('북마크 목록을 불러오지 못했습니다.');
       console.error(e);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  };
+  }, [hasMore, loadingMore, nextPage]);
+
+  useEffect(() => {
+    if (initialLoadStarted.current) return;
+    initialLoadStarted.current = true;
+    void loadDraws(true);
+  }, []);
 
   const handleUnlike = async (drawId: number, event: React.MouseEvent) => {
     event.preventDefault();
@@ -44,7 +58,7 @@ export function MyLikedPage() {
       await unlikeDraw(drawId);
     } catch (e) {
       // 실패 시 복구
-      loadDraws();
+      void loadDraws(true);
       alert('찜 해제에 실패했습니다. 다시 시도해주세요.');
     }
   };
@@ -147,127 +161,33 @@ export function MyLikedPage() {
               </div>
             </div>
 
-            {/* 응모 가능한 드로우 (ACTIVE) */}
-            {activeDraws.length > 0 && (
-              <section className="mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">응모 가능한 드로우</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {activeDraws.map((draw) => (
-                    <Link
-                      key={draw.id}
-                      to={`/draws/${draw.id}`}
-                      className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow group"
-                    >
-                      <div className="relative">
-                        <img
-                          src={draw.image}
-                          alt={draw.title}
-                          className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <button
-                          onClick={(e) => handleUnlike(draw.id, e)}
-                          className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors"
-                          title="찜 해제"
-                        >
-                          <Heart className="w-5 h-5 fill-red-500 text-red-500" />
-                        </button>
-                        <div className="absolute bottom-3 left-3">
-                          {getStatusBadge(draw.status)}
-                        </div>
+            <section>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">최근 찜한 순</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {likedDraws.map((draw) => (
+                  <Link key={draw.id} to={`/draws/${draw.id}`} className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow group">
+                    <div className="relative">
+                      <img src={draw.image} alt={draw.title} className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <button onClick={(e) => handleUnlike(draw.id, e)} className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors" title="찜 해제">
+                        <Heart className="w-5 h-5 fill-red-500 text-red-500" />
+                      </button>
+                      <div className="absolute bottom-3 left-3">{getStatusBadge(draw.status)}</div>
+                    </div>
+                    <div className="p-4">
+                      <h3 className="font-bold text-gray-900 mb-1 line-clamp-1">{draw.title}</h3>
+                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">{draw.description}</p>
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-1 text-gray-600"><Clock className="w-4 h-4" /><span>{draw.timeLeft}</span></div>
+                        <div className="flex items-center gap-1 text-purple-600 font-medium"><Ticket className="w-4 h-4" /><span>{draw.ticketCost}T</span></div>
                       </div>
-                      <div className="p-4">
-                        <h3 className="font-bold text-gray-900 mb-1 line-clamp-1">{draw.title}</h3>
-                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{draw.description}</p>
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-1 text-gray-600">
-                            <Clock className="w-4 h-4" />
-                            <span>{draw.timeLeft}</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-purple-600 font-medium">
-                            <Ticket className="w-4 h-4" />
-                            <span>{draw.ticketCost}T</span>
-                          </div>
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500">
-                          찜한 날짜: {draw.likedDate}
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* 대기/종료 드로우 (DRAFT, DRAWING, CLOSE, CANCEL) */}
-            {otherDraws.length > 0 && (
-              <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">대기/종료 드로우</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {otherDraws.map((draw) => (
-                    <Link
-                      key={draw.id}
-                      to={`/draws/${draw.id}`}
-                      className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow group opacity-75 hover:opacity-100"
-                    >
-                      <div className="relative">
-                        <img
-                          src={draw.image}
-                          alt={draw.title}
-                          className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300 grayscale group-hover:grayscale-0"
-                        />
-                        <button
-                          onClick={(e) => handleUnlike(draw.id, e)}
-                          className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors"
-                          title="찜 해제"
-                        >
-                          <Heart className="w-5 h-5 fill-red-500 text-red-500" />
-                        </button>
-                        <div className="absolute bottom-3 left-3">
-                          {getStatusBadge(draw.status)}
-                        </div>
-                      </div>
-                      <div className="p-4">
-                        <h3 className="font-bold text-gray-900 mb-1 line-clamp-1">{draw.title}</h3>
-                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{draw.description}</p>
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="text-gray-600">{draw.timeLeft}</div>
-                          <div className="flex items-center gap-1 text-purple-600 font-medium">
-                            <Ticket className="w-4 h-4" />
-                            <span>{draw.ticketCost}T</span>
-                          </div>
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500">
-                          찜한 날짜: {draw.likedDate}
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* 페이지네이션 */}
-            {totalPages > 1 && (
-              <div className="flex justify-center gap-2 mt-12">
-                <button
-                  disabled={page === 0 || loading}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  이전
-                </button>
-                <span className="px-4 py-2 text-sm text-gray-700 font-medium">
-                  {page + 1} / {totalPages}
-                </span>
-                <button
-                  disabled={page + 1 >= totalPages || loading}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  다음
-                </button>
+                      <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500">찜한 날짜: {draw.likedDate}</div>
+                    </div>
+                  </Link>
+                ))}
               </div>
-            )}
+            </section>
+
+            <InfiniteScrollTrigger hasMore={hasMore} isLoading={loadingMore} onLoadMore={() => void loadDraws()} />
           </>
         )}
       </main>

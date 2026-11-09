@@ -1,7 +1,9 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { MainPage } from '@/components/MainPage';
 import { LoginPage } from '@/components/LoginPage';
+import { GoogleOnboardingPage } from '@/components/GoogleOnboardingPage';
 import { SignupPage } from '@/components/SignupPage';
 import { ForgotPasswordPage } from '@/components/ForgotPasswordPage';
 import { DrawDetailPage } from '@/components/draw/DrawDetailPage';
@@ -19,12 +21,39 @@ import 'slick-carousel/slick/slick-theme.css';
 import { AuthProvider } from './contexts/AuthContext';
 import { LoginRequiredProvider } from '@/components/providers/LoginRequiredProvider';
 import AdminPage from './components/AdminPage';
+import { useDrawStatusEvents } from '@/hooks/useDrawStatusEvents';
+import { useNotificationEvents } from '@/hooks/useNotificationEvents';
+import { useAuth } from '@/contexts/AuthContext';
+import { useLoginRequired } from '@/components/providers/LoginRequiredProvider';
+
+function RealtimeDrawSync() {
+  useDrawStatusEvents();
+  useNotificationEvents();
+  return null;
+}
+
+function ProtectedDrawDetail() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const { requireLogin } = useLoginRequired();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      requireLogin(`${location.pathname}${location.search}`);
+    }
+  }, [isAuthenticated, isLoading, location.pathname, location.search, requireLogin]);
+
+  if (isLoading || !isAuthenticated) return null;
+
+  return <DrawDetailPage />;
+}
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <LoginRequiredProvider>
+          <RealtimeDrawSync />
           <Toaster 
             position="top-center"
             toastOptions={{
@@ -51,9 +80,10 @@ export default function App() {
           <Routes>
             <Route path="/" element={<MainPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/onboarding" element={<GoogleOnboardingPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/draws/:drawId" element={<DrawDetailPage />} />
+            <Route path="/draws/:drawId" element={<ProtectedDrawDetail />} />
             <Route path="/draws" element={<DrawsListPage />} />
             <Route path="/draws/create" element={<CreateDrawPage />} />
             <Route path="/draws/:drawId/edit" element={<EditDrawPage />} />

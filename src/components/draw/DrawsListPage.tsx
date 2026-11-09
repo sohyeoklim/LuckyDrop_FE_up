@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLoginRequired } from "@/components/providers/LoginRequiredProvider";
 import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
@@ -14,9 +14,10 @@ import {
   Heart,
   Users,
   TrendingUp,
-  Zap
+  Zap,
 } from "lucide-react";
-import { useDrawList } from "@/hooks/useDrawList";
+import { useInfiniteDrawList } from "@/hooks/useDrawList";
+import { InfiniteScrollTrigger } from "@/components/common/InfiniteScrollTrigger";
 import type { DrawSort } from "@/api/draw";
 import type { DrawCardResponse } from "@/types/draw";
 import { getImageUrl } from "@/utils/image";
@@ -24,17 +25,44 @@ import {
   getDrawStatusStyle,
   getDrawTimeText,
   isOpenDraw,
-  getTimeLeftMinutesForSort,
 } from "@/utils/draw";
+import { useCurrentTime } from "@/hooks/useCurrentTime";
 
 type SortOption = "latest" | "deadline" | "popular" | "participant";
+
+const DRAW_LIST_SORT_STORAGE_KEY = "luckydrop.draw-list.sort";
+const DRAW_LIST_SHOW_CLOSED_STORAGE_KEY = "luckydrop.draw-list.show-closed";
+
+function getSavedSortOption(): SortOption {
+  const savedSort = localStorage.getItem(DRAW_LIST_SORT_STORAGE_KEY);
+
+  return savedSort === "deadline" ||
+    savedSort === "popular" ||
+    savedSort === "participant" ||
+    savedSort === "latest"
+    ? savedSort
+    : "latest";
+}
+
+function getSavedShowClosed(): boolean {
+  return localStorage.getItem(DRAW_LIST_SHOW_CLOSED_STORAGE_KEY) === "true";
+}
 
 export function DrawsListPage() {
   const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortOption, setSortOption] = useState<SortOption>("latest");
-  const [showOnlyOpen, setShowOnlyOpen] = useState(true);
+  const [sortOption, setSortOption] = useState<SortOption>(getSavedSortOption);
+  const [showClosed, setShowClosed] = useState(getSavedShowClosed);
+  const now = useCurrentTime();
+
+  useEffect(() => {
+    localStorage.setItem(DRAW_LIST_SORT_STORAGE_KEY, sortOption);
+  }, [sortOption]);
+
+  useEffect(() => {
+    localStorage.setItem(DRAW_LIST_SHOW_CLOSED_STORAGE_KEY, String(showClosed));
+  }, [showClosed]);
 
   const serverSort: DrawSort = (() => {
     switch (sortOption) {
@@ -51,14 +79,13 @@ export function DrawsListPage() {
     }
   })();
 
-  const { data, isLoading, isError } = useDrawList({
-    tab: "ALL",
-    page: 0,
+  const { data, isLoading, isError, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteDrawList({
+    tab: showClosed ? "ALL" : "OPEN",
     size: 12,
     sort: serverSort,
   });
 
-  const draws = data?.content ?? [];
+  const draws = data?.pages.flatMap((response) => response.content) ?? [];
 
   const { data: statsData } = useDrawStats();
 
@@ -71,33 +98,14 @@ export function DrawsListPage() {
         draw.title.toLowerCase().includes(keyword) ||
         draw.productName.toLowerCase().includes(keyword);
 
-      const matchesStatus =
-        !showOnlyOpen ||
-        isOpenDraw(draw.status, draw.startAt, draw.endAt);
+      const matchesStatus = showClosed || isOpenDraw(draw.status, draw.startAt, draw.endAt) || draw.status === "DRAFT";
 
       return matchesSearch && matchesStatus;
     });
 
-    result = [...result].sort((a, b) => {
-      switch (sortOption) {
-        case "latest":
-          return new Date(b.startAt).getTime() - new Date(a.startAt).getTime();
-        case "deadline":
-          return (
-            getTimeLeftMinutesForSort(a.status, a.startAt, a.endAt) -
-            getTimeLeftMinutesForSort(b.status, b.startAt, b.endAt)
-          );
-        case "popular":
-          return b.bookmarkCount - a.bookmarkCount;
-        case "participant":
-          return b.participantCount - a.participantCount;
-        default:
-          return 0;
-      }
-    });
-
+    // 정렬은 서버가 담당한다. 카드 수치만 즉시 갱신해도 현재 목록의 순서는 유지된다.
     return result;
-  }, [draws, searchQuery, showOnlyOpen, sortOption]);
+  }, [draws, searchQuery, showClosed, sortOption, now]);
 
   if (isLoading) {
     return <div className="min-h-screen bg-gray-50 p-10">로딩중...</div>;
@@ -189,12 +197,12 @@ export function DrawsListPage() {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={showOnlyOpen}
-                  onChange={(e) => setShowOnlyOpen(e.target.checked)}
+                  checked={showClosed}
+                  onChange={(e) => setShowClosed(e.target.checked)}
                   className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
                 />
                 <span className="text-sm font-medium text-gray-700">
-                  진행중인 드로우만 보기
+                  마감된 드로우도 보기
                 </span>
               </label>
             </div>
@@ -204,7 +212,7 @@ export function DrawsListPage() {
         {filteredDraws.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredDraws.map((draw) => (
-              <DrawListCardItem key={draw.drawId} draw={draw} />
+              <DrawListCardItem key={draw.drawId} draw={draw} now={now} />
             ))}
           </div>
         ) : (
@@ -216,12 +224,14 @@ export function DrawsListPage() {
             <p className="text-gray-600">다른 검색어나 필터를 시도해보세요.</p>
           </div>
         )}
+
+        {draws.length > 0 && <InfiniteScrollTrigger hasMore={Boolean(hasNextPage)} isLoading={isFetchingNextPage} onLoadMore={() => fetchNextPage()} />}
       </main>
     </div>
   );
 }
 
-function DrawListCardItem({ draw }: { draw: DrawCardResponse }) {
+function DrawListCardItem({ draw, now }: { draw: DrawCardResponse; now: number }) {
   const navigate = useNavigate();
   const { requireLogin } = useLoginRequired();
   const { mutate: toggleBookmark, isPending } = useToggleDrawBookmark();
@@ -233,7 +243,7 @@ function DrawListCardItem({ draw }: { draw: DrawCardResponse }) {
     navigate(detailPath);
   };
 
-  const timeLeftText = getDrawTimeText(draw.status, draw.startAt, draw.endAt);
+  const timeLeftText = getDrawTimeText(draw.status, draw.startAt, draw.endAt, now);
   const { label, className } = getDrawStatusStyle(
     draw.status,
     draw.startAt,
@@ -301,14 +311,14 @@ function DrawListCardItem({ draw }: { draw: DrawCardResponse }) {
         type="button"
         onClick={handleBookmark}
         disabled={isPending}
-        className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1.5 bg-slate-950/90 border border-white/40 backdrop-blur-sm rounded-full text-white shadow-md hover:bg-slate-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Heart
           className={`w-4 h-4 ${
-            draw.isBookmarked ? "fill-red-500 text-red-500" : "text-gray-400"
+            draw.isBookmarked ? "fill-red-400 text-red-400" : "text-white"
           }`}
         />
-        <span className="text-xs font-semibold text-gray-800">
+        <span className="text-xs font-black text-white tabular-nums">
           {draw.bookmarkCount}
         </span>
       </button>

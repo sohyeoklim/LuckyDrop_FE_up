@@ -41,21 +41,25 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// 응답 인터셉터: 401 → 토큰 재발급
+// 응답 인터셉터: 만료·누락 토큰이면 한 번 재발급 후 원래 요청을 재시도한다.
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const { config, response } = error;
 
-    // 401 + 에러 타입이 "expired"일 때만 재발급 시도
-    if (response?.status === 401 && response.data?.error === 'expired') {
-      const originalRequest = config;
+    const originalRequest = config as typeof config & { _retry?: boolean };
+
+    // 403은 인증은 되었지만 권한이 없는 경우다. 토큰 재발급은 401에만 시도한다.
+    if (response?.status === 401 &&
+        !originalRequest?._retry &&
+        !originalRequest?.url?.includes('/api/user/token/reissue')) {
+      originalRequest._retry = true;
 
       if (!isRefreshing) {
         isRefreshing = true;
 
         try {
-          const res = await axios.post('/api/token/reissue', {}, { withCredentials: true });
+          const res = await axios.post('http://localhost:8080/api/user/token/reissue', {}, { withCredentials: true });
           const newAccessToken = res.headers.authorization.replace('Bearer ', '');
           localStorage.setItem('accessToken', newAccessToken);
           onRefreshed(newAccessToken);
@@ -87,14 +91,14 @@ apiClient.interceptors.response.use(
 );
 
 // 티켓 잔액 조회
-export const getTicketWallet = async (userId: string) => {
-  const response = await apiClient.get(`/api/ticket/wallet/${userId}`);
+export const getTicketWallet = async () => {
+  const response = await apiClient.get('/api/ticket/wallet/me');
   return response.data;
 };
 
 // 티켓 거래내역 조회
-export const getTicketLedger = async (userId: string) => {
-  const response = await apiClient.get(`/api/ticket/ledger/${userId}`);
+export const getTicketLedger = async (page = 0, size = 20) => {
+  const response = await apiClient.get('/api/ticket/ledger/me', { params: { page, size } });
   return response.data;
 };
 
