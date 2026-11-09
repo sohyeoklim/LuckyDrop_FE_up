@@ -8,6 +8,7 @@ import { getDrawTimeText, getDrawStatusStyle } from "../../utils/draw";
 import { getImageUrl } from "../../utils/image";
 import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
 import { useLoginRequired } from "@/components/providers/LoginRequiredProvider";
+import { useCurrentTime } from "@/hooks/useCurrentTime";
 
 interface DrawCardProps {
   draw: DrawCardResponse;
@@ -17,6 +18,7 @@ export function DrawCard({ draw }: DrawCardProps) {
   const navigate = useNavigate();
   const { requireLogin } = useLoginRequired();
   const { mutate: toggleBookmark, isPending } = useToggleDrawBookmark();
+  const now = useCurrentTime();
 
   const detailPath = `/draws/${draw.drawId}`;
 
@@ -63,7 +65,7 @@ export function DrawCard({ draw }: DrawCardProps) {
     );
   };
 
-  const timeText = getDrawTimeText(draw.status, draw.startAt, draw.endAt);
+  const timeText = getDrawTimeText(draw.status, draw.startAt, draw.endAt, now);
   const { label, className } = getDrawStatusStyle(
     draw.status,
     draw.startAt,
@@ -76,14 +78,14 @@ export function DrawCard({ draw }: DrawCardProps) {
       tabIndex={0}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
-      className="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1 group block cursor-pointer"
+      className="overflow-hidden rounded-2xl border border-[#30344b] bg-[#191b2b] shadow-lg shadow-black/20 transition-all hover:-translate-y-1 hover:border-[#00d68a]/60 hover:shadow-[0_16px_40px_rgba(0,0,0,.32)] group block cursor-pointer"
     >
       <div className="relative">
-        <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
+        <div className="aspect-[4/3] bg-[#23263a] overflow-hidden">
           <img
             src={getImageUrl(draw.imageUrl)}
             alt={draw.title}
-            className="w-full h-full object-cover"
+          className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
             onError={(e) => {
               const target = e.currentTarget;
               if (!target.src.includes("/placeholder.png")) {
@@ -97,13 +99,16 @@ export function DrawCard({ draw }: DrawCardProps) {
           type="button"
           onClick={handleLike}
           disabled={isPending}
-          className="absolute top-4 right-4 w-11 h-11 bg-white/95 rounded-full flex items-center justify-center shadow-md hover:scale-110 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+          className="absolute top-4 right-4 h-10 min-w-10 px-3 bg-[#10121f]/95 border border-white/40 rounded-xl flex items-center justify-center gap-1.5 text-white shadow-md hover:scale-110 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Heart
             className={`w-6 h-6 ${
-              draw.isBookmarked ? "fill-red-500 text-red-500" : "text-gray-500"
+              draw.isBookmarked ? "fill-red-400 text-red-400" : "text-white"
             }`}
           />
+          <span className="text-sm font-black text-white tabular-nums">
+            {draw.bookmarkCount}
+          </span>
         </button>
 
         <div className="absolute bottom-4 left-4">
@@ -114,35 +119,31 @@ export function DrawCard({ draw }: DrawCardProps) {
       </div>
 
       <div className="p-5">
-        <h3 className="text-2xl font-bold text-gray-900 mb-2 line-clamp-1">
+        <h3 className="text-xl font-black text-white mb-2 line-clamp-1">
           {draw.productName}
         </h3>
 
-        <p className="text-lg text-gray-600 mb-5 line-clamp-1">{draw.title}</p>
+        <p className="text-sm text-[#aeb4c7] mb-5 line-clamp-1">{draw.title}</p>
 
-        <div className="space-y-3 border-t border-gray-200 pt-4">
+        <div className="space-y-3 border-t border-[#30344b] pt-4">
           <div className="flex items-center justify-between text-base">
-            <div className="flex items-center gap-2 text-gray-600">
+            <div className="flex items-center gap-2 text-[#aeb4c7]">
               <Clock className="w-5 h-5" />
               <span>{timeText}</span>
             </div>
 
-            <div className="flex items-center gap-1 text-purple-600 font-semibold">
+            <div className="flex items-center gap-1 text-[#00d68a] font-black">
               <Ticket className="w-5 h-5" />
               <span>{draw.ticketCostEntry}T</span>
             </div>
           </div>
 
           <div className="flex items-center justify-between text-base">
-            <div className="flex items-center gap-2 text-gray-600">
+            <div className="flex items-center gap-2 text-[#aeb4c7]">
               <Users className="w-5 h-5" />
               <span>{draw.participantCount}명 응모</span>
             </div>
 
-            <div className="flex items-center gap-1 text-red-500">
-              <Heart className="w-5 h-5" />
-              <span>{draw.bookmarkCount}</span>
-            </div>
           </div>
         </div>
       </div>

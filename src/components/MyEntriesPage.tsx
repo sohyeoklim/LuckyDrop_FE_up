@@ -3,6 +3,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Search, Filter, Loader2, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import apiClient from '../api/client';
+import { InfiniteScrollTrigger } from './common/InfiniteScrollTrigger';
+import toast from 'react-hot-toast';
+import type { MyDeliveryResponse } from '@/types/draw';
 
 // ✅ 백엔드 DrawStatus와 매핑
 type EntryStatus = 'ACTIVE' | 'DRAWING' | 'CLOSE' | 'CANCEL';
@@ -18,6 +21,7 @@ interface Entry {
   status: EntryStatus;
   resultDate?: string;
   isWinner: number;
+  shippable: boolean;
 }
 
 interface EntryStats {
@@ -40,6 +44,9 @@ export function MyEntriesPage() {
   const [loadingStats, setLoadingStats] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [deliveryByDrawId, setDeliveryByDrawId] = useState<Record<number, MyDeliveryResponse | null>>({});
+  const [deliveryForms, setDeliveryForms] = useState<Record<number, { phone: string; address: string }>>({});
+  const [deliverySubmittingDrawId, setDeliverySubmittingDrawId] = useState<number | null>(null);
   const SIZE = 10;
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -60,6 +67,17 @@ export function MyEntriesPage() {
 
   // ✅ DrawStatus에 맞춘 상태 배지
   const getStatusBadge = (status: EntryStatus, isWinner: boolean) => {
+    if (status === 'CLOSE') {
+      const result = isWinner
+        ? { text: '당첨 🎉', color: 'bg-red-100 text-red-800 font-bold' }
+        : { text: '미당첨', color: 'bg-gray-200 text-gray-600' };
+      return (
+        <span className={`px-3 py-1 rounded-full text-xs font-medium ${result.color}`}>
+          {result.text}
+        </span>
+      );
+    }
+
     const badges: Record<EntryStatus, { text: string; color: string }> = {
       ACTIVE: { text: '진행중', color: 'bg-green-100 text-green-800' },
       DRAWING: { text: '추첨중', color: 'bg-yellow-100 text-yellow-800' },
@@ -97,8 +115,32 @@ export function MyEntriesPage() {
       status: mapBackendStatus(item.status), // 백엔드 DrawStatus 그대로
       resultDate: item.resultDate,
       isWinner: item.isWinner === 1 ? 1 : 0,
+      shippable: item.shippable === true || item.shippable === 1,
     })) || [];
   };
+
+  const loadDeliveryInfo = useCallback(async (items: Entry[]) => {
+    const shippingWinners = items.filter((item) => item.isWinner === 1 && item.shippable);
+    if (shippingWinners.length === 0) return;
+
+    const results = await Promise.all(shippingWinners.map(async (item) => {
+      try {
+        const response = await apiClient.get<MyDeliveryResponse>(`/api/draws/${item.drawId}/my-delivery`);
+        return [item.drawId, response.status === 204 || !response.data ? null : response.data] as const;
+      } catch {
+        return [item.drawId, null] as const;
+      }
+    }));
+
+    setDeliveryByDrawId((current) => ({ ...current, ...Object.fromEntries(results) }));
+    setDeliveryForms((current) => {
+      const next = { ...current };
+      results.forEach(([drawId, delivery]) => {
+        if (delivery && !next[drawId]) next[drawId] = { phone: delivery.phone ?? '', address: delivery.address ?? '' };
+      });
+      return next;
+    });
+  }, []);
 
   const loadStats = useCallback(async () => {
     if (!user?.id) return;
@@ -117,10 +159,9 @@ export function MyEntriesPage() {
     }
   }, [user?.id]);
 
-  const refreshEntries = useCallback(async (reset = true) => {
-    if (!user?.id || abortControllerRef.current) {
-      abortControllerRef.current?.abort();
-    }
+  const refreshEntries = useCallback(async (reset = true, pageToLoad = 0) => {
+    if (!user?.id) return;
+    abortControllerRef.current?.abort();
     
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -128,14 +169,13 @@ export function MyEntriesPage() {
     if (reset) {
       setLoading(true);
       setEntries([]);
-      setCurrentPage(0);
     } else {
       setLoadingMore(true);
     }
     
     try {
       const params: any = {
-        page: reset ? 0 : currentPage,
+        page: pageToLoad,
         size: SIZE,
         ...(filterStatus !== 'all' && { status: filterStatus }), // ✅ 백엔드 DrawStatus 그대로 전달
         ...(searchQuery.trim() && { search: searchQuery.trim() }),
@@ -153,10 +193,12 @@ export function MyEntriesPage() {
       
       if (reset) {
         setEntries(newEntries);
+        setDeliveryByDrawId({});
       } else {
         setEntries(prev => [...prev, ...newEntries]);
-        setCurrentPage(prev => prev + 1);
       }
+      void loadDeliveryInfo(newEntries);
+      setCurrentPage(pageToLoad + 1);
       setHasMore(!data.last);
     } catch (error: any) {
       if (error.name !== 'AbortError') {
@@ -165,27 +207,22 @@ export function MyEntriesPage() {
     } finally {
       setLoading(false);
       setLoadingMore(false);
-      abortControllerRef.current = null;
+      if (abortControllerRef.current === abortController) abortControllerRef.current = null;
     }
-  }, [user?.id, filterStatus, searchQuery, currentPage]);
+  }, [user?.id, filterStatus, searchQuery, loadDeliveryInfo]);
 
   useEffect(() => {
-    if (user?.id) {
-      loadStats();
-      refreshEntries(true);
-    }
-  }, [user?.id, loadStats, refreshEntries]);
-
-  useEffect(() => {
+    if (!user?.id) return;
+    void loadStats();
     const timeoutId = setTimeout(() => {
-      refreshEntries(true);
+      void refreshEntries(true, 0);
     }, 300);
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, filterStatus, refreshEntries]);
+  }, [user?.id, searchQuery, filterStatus, loadStats, refreshEntries]);
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return;
-    await refreshEntries(false);
+    await refreshEntries(false, currentPage);
   };
 
   // ✅ DrawStatus에 맞춘 통계 계산
@@ -194,6 +231,39 @@ export function MyEntriesPage() {
     inProgress: entries.filter(e => ['ACTIVE', 'DRAWING'].includes(e.status)).length,
     won: entries.filter(e => isEntryWinner(e)).length,
     totalTicketsUsed: entries.reduce((sum, e) => sum + getTicketUsedDisplay(e.ticketUsed), 0),
+  };
+
+  const submitDeliveryAddress = async (event: React.FormEvent<HTMLFormElement>, entry: Entry) => {
+    event.preventDefault();
+    const delivery = deliveryByDrawId[entry.drawId];
+    const form = deliveryForms[entry.drawId];
+    if (!delivery || !form || delivery.fulfillmentStatus !== 'ADDRESS_REQUIRED') return;
+
+    setDeliverySubmittingDrawId(entry.drawId);
+    try {
+      await apiClient.post(`/api/draws/${entry.drawId}/winners/${delivery.winnerId}/delivery-address`, form);
+      setDeliveryByDrawId((current) => ({
+        ...current,
+        [entry.drawId]: { ...delivery, phone: form.phone, address: form.address, fulfillmentStatus: 'ADDRESS_SUBMITTED' },
+      }));
+      toast.success('배송 정보를 제출했습니다.');
+    } catch (error) {
+      console.error('배송 정보 제출 실패:', error);
+      toast.error('배송 정보를 제출하지 못했습니다.');
+    } finally {
+      setDeliverySubmittingDrawId(null);
+    }
+  };
+
+  const deliveryStatusText = (status: MyDeliveryResponse['fulfillmentStatus']) => {
+    switch (status) {
+      case 'ADDRESS_REQUIRED': return '배송 정보를 입력해주세요.';
+      case 'ADDRESS_SUBMITTED': return '배송 정보가 제출되었습니다. 개설자가 발송을 준비 중입니다.';
+      case 'PROCESSING': return '상품을 준비하고 있습니다.';
+      case 'COMPLETED': return '배송 처리가 완료되었습니다.';
+      case 'EXPIRED': return '배송 정보 입력 기한이 만료되었습니다.';
+      default: return '배송 처리 상태를 확인 중입니다.';
+    }
   };
 
   if (!user) {
@@ -291,12 +361,12 @@ export function MyEntriesPage() {
           ) : entries.length > 0 ? (
             <div className="divide-y divide-gray-200">
               {entries.map((entry) => (
-                <Link
+                <div
                   key={entry.id || entry.drawId}
-                  to={`/draws/${entry.drawId}`}
-                  className="block p-6 hover:bg-gray-50 transition-colors"
+                  className="p-6"
                 >
-                  <div className="flex gap-4">
+                  <Link to={`/draws/${entry.drawId}`} className="block rounded-lg hover:bg-gray-50 transition-colors">
+                    <div className="flex gap-4">
                     <img
                       src={entry.drawImage}
                       alt={entry.drawTitle}
@@ -330,9 +400,7 @@ export function MyEntriesPage() {
                           <p className="text-sm font-medium text-red-600">
                             🎉 축하합니다! 당첨되셨습니다!
                           </p>
-                          <p className="text-xs text-gray-600 mt-1">
-                            배송 정보 입력을 위해 고객센터로 연락주세요.
-                          </p>
+                          <p className="text-xs text-gray-600 mt-1">{entry.shippable ? '아래에서 배송 정보를 확인하고 제출해주세요.' : '개설자가 보상을 전달하면 이 드로우에서 확인할 수 있습니다.'}</p>
                         </div>
                       )}
                       {entry.status === 'DRAWING' && (
@@ -343,8 +411,31 @@ export function MyEntriesPage() {
                         </div>
                       )}
                     </div>
-                  </div>
-                </Link>
+                    </div>
+                  </Link>
+                  {isEntryWinner(entry) && entry.shippable && deliveryByDrawId[entry.drawId] && (() => {
+                    const delivery = deliveryByDrawId[entry.drawId]!;
+                    const form = deliveryForms[entry.drawId] ?? { phone: '', address: '' };
+                    const editable = delivery.fulfillmentStatus === 'ADDRESS_REQUIRED';
+                    return (
+                      <section className="mt-4 rounded-xl border border-purple-200 bg-purple-50 p-4">
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <div>
+                            <h4 className="font-bold text-purple-900">배송 정보</h4>
+                            <p className="mt-1 text-xs text-purple-800">{deliveryStatusText(delivery.fulfillmentStatus)}</p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-white px-2 py-1 text-xs font-medium text-purple-700">{editable ? '입력 필요' : delivery.fulfillmentStatus === 'EXPIRED' ? '기한 만료' : '제출 완료'}</span>
+                        </div>
+                        {delivery.addressDeadlineAt && <p className="mb-3 text-xs text-gray-600">입력 기한: {new Date(delivery.addressDeadlineAt).toLocaleString('ko-KR')}</p>}
+                        <form className="space-y-3" onSubmit={(event) => void submitDeliveryAddress(event, entry)}>
+                          <input required disabled={!editable || deliverySubmittingDrawId === entry.drawId} value={form.phone} onChange={(event) => setDeliveryForms((current) => ({ ...current, [entry.drawId]: { ...form, phone: event.target.value } }))} placeholder="연락처" className="w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm disabled:bg-gray-100" />
+                          <textarea required disabled={!editable || deliverySubmittingDrawId === entry.drawId} value={form.address} onChange={(event) => setDeliveryForms((current) => ({ ...current, [entry.drawId]: { ...form, address: event.target.value } }))} placeholder="배송지 주소" className="min-h-24 w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm disabled:bg-gray-100" />
+                          <button type="submit" disabled={!editable || deliverySubmittingDrawId === entry.drawId} className="w-full rounded-lg bg-purple-600 py-2 text-sm font-bold text-white hover:bg-purple-700 disabled:bg-gray-400">{deliverySubmittingDrawId === entry.drawId ? '제출 중...' : editable ? '배송 정보 제출' : delivery.fulfillmentStatus === 'EXPIRED' ? '입력 기한 만료' : '배송 정보 제출 완료'}</button>
+                        </form>
+                      </section>
+                    );
+                  })()}
+                </div>
               ))}
             </div>
           ) : (
@@ -355,17 +446,7 @@ export function MyEntriesPage() {
           )}
         </div>
 
-        {hasMore && entries.length > 0 && (
-          <div className="text-center mt-8">
-            <button
-              onClick={loadMore}
-              disabled={loadingMore}
-              className="px-8 py-3 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 font-medium disabled:opacity-50"
-            >
-              {loadingMore ? '불러오는 중...' : '더보기'}
-            </button>
-          </div>
-        )}
+        {entries.length > 0 && <InfiniteScrollTrigger hasMore={hasMore} isLoading={loadingMore} onLoadMore={() => void loadMore()} />}
       </main>
     </div>
   );

@@ -10,13 +10,14 @@ interface User {
   phone?: string;
   address?: string;
   invitationCode?: string;
+  googleLinked?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateUser: (updatedUserData: Partial<User>) => void;
   fetchUserDetails: () => Promise<void>;
   isLoading: boolean;
@@ -41,10 +42,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fetchUserDetails = async () => {
     try {
       const response = await apiClient.get('/api/user/me');
-      updateUser(response.data);
+      const userData: User = {
+        ...response.data,
+        id: String(response.data.id),
+      };
+      setUser(userData);
+      localStorage.setItem('userData', JSON.stringify(userData));
     } catch (error: any) {
       if (error.response?.status === 401) {
-        console.warn('토큰 만료. localStorage로 유지');
+        setUser(null);
+        localStorage.removeItem('userData');
+        localStorage.removeItem('accessToken');
         return;
       }
       console.error('user/me 실패:', error);
@@ -67,6 +75,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             ...(parsed.phone && { phone: String(parsed.phone) }),
             ...(parsed.address && { address: String(parsed.address) }),
             ...(parsed.invitationCode && { invitationCode: String(parsed.invitationCode) }),
+            ...(typeof parsed.googleLinked === 'boolean' && { googleLinked: parsed.googleLinked }),
             ...(parsed.name && { name: String(parsed.name) }),
           };
           setUser(safeUser);
@@ -75,11 +84,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // 토큰 있으면 서버 데이터 갱신 (실패해도 localStorage 유지)
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        await fetchUserDetails().catch(console.warn);
-      }
+      // HttpOnly 쿠키 기반 로그인(일반 로그인·Google OAuth)을 모두 복원한다.
+      await fetchUserDetails().catch(console.warn);
       
       setIsLoading(false);
     };
@@ -119,21 +125,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = async () => {
-  try {
-    // 백엔드 API 호출 (refreshToken 쿠키 제거 등)
-    await apiClient.post('/api/user/logout');  // 백엔드에서 만든 엔드포인트
-  } catch (error) {
-    console.warn('Logout API 실패. 클라이언트 상태만 정리:', error);
-    // API 실패해도 클라이언트는 무조건 정리
-  } finally {
-    // 클라이언트 상태 정리 (무조건 실행)
-    setUser(null);
-    localStorage.removeItem('userData');
-    localStorage.removeItem('accessToken');
-    // 로그인 페이지로 리다이렉트 (필요시)
-    window.location.href = '/login';
-  }
-};
+    try {
+      await apiClient.post('/api/user/logout');
+    } catch (error) {
+      console.warn('Logout API 실패. 클라이언트 상태만 정리:', error);
+    } finally {
+      setUser(null);
+      localStorage.removeItem('userData');
+      localStorage.removeItem('accessToken');
+    }
+  };
 
 
   return (

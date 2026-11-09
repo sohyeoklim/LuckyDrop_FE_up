@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { Mail, Lock, Ticket } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,6 +21,19 @@ export function LoginPage() {
       toast.error(errorMessage);
     }
   };
+
+  const handleGoogleLogin = () => {
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+    window.location.assign(`${apiBaseUrl}/oauth2/authorization/google`);
+  };
+
+  useEffect(() => {
+    const error = new URLSearchParams(window.location.search).get('oauthError');
+    if (error) {
+      toast.error(error);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   if (user) {
     return <Navigate to="/" />;
@@ -98,6 +111,27 @@ export function LoginPage() {
               {isLoading ? '로그인 중...' : '로그인'}
             </button>
           </form>
+
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs text-gray-400">또는</span>
+            <div className="h-px flex-1 bg-gray-200" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isLoading}
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3 font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
+              <path fill="#4285F4" d="M21.35 12.24c0-.71-.06-1.39-.18-2.04H12v3.86h5.24a4.48 4.48 0 0 1-1.94 2.94v2.5h3.14c1.84-1.7 2.91-4.2 2.91-7.26Z" />
+              <path fill="#34A853" d="M12 21.75c2.63 0 4.84-.87 6.45-2.35l-3.14-2.5c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3v2.59A9.75 9.75 0 0 0 12 21.75Z" />
+              <path fill="#FBBC05" d="M6.54 13.79A5.87 5.87 0 0 1 6.24 12c0-.62.11-1.22.3-1.79V7.62H3.3A9.75 9.75 0 0 0 2.25 12c0 1.57.38 3.06 1.05 4.38l3.24-2.59Z" />
+              <path fill="#EA4335" d="M12 6.18c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.83 3.27 14.63 2.25 12 2.25a9.75 9.75 0 0 0-8.7 5.37l3.24 2.59c.77-2.31 2.92-4.03 5.46-4.03Z" />
+            </svg>
+            Google로 로그인하기
+          </button>
 
           {/* 추가 옵션 */}
           <div className="mt-6 text-center space-y-3">

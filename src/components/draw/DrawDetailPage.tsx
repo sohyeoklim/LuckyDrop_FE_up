@@ -8,6 +8,7 @@ import {
   Heart,
   Users,
   AlertCircle,
+  ShieldCheck,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -19,8 +20,9 @@ import { useToggleDrawBookmark } from "@/hooks/useToggleDrawBookmark";
 import { useDrawDetail } from "@/hooks/useDrawDetail";
 import { useDrawWinners } from "@/hooks/useDrawWinners";
 import type { DrawStatus } from "@/types/draw";
-import type { HostWinnerInfoResponse } from "@/types/draw";
+import type { HostWinnerInfoResponse, MyDeliveryResponse, MyRewardResponse } from "@/types/draw";
 import apiClient, { getMe } from "@/api/client";
+import { useCurrentTime } from "@/hooks/useCurrentTime";
 
 function getStatusBadge(status: DrawStatus) {
   const badges = {
@@ -40,7 +42,17 @@ function getStatusBadge(status: DrawStatus) {
   );
 }
 
-function getTimeLeftText(status: DrawStatus, endAt: string) {
+function getTimeLeftText(status: DrawStatus, startAt: string, endAt: string, now: number) {
+  if (status === "DRAFT") {
+    const diff = new Date(startAt).getTime() - now;
+    if (diff <= 0) return "시작 처리 중";
+    const totalSeconds = Math.floor(diff / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `시작까지 ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
   if (status !== "ACTIVE") {
     if (status === "DRAFT") return "시작 전";
     if (status === "DRAWING") return "추첨 중";
@@ -49,15 +61,17 @@ function getTimeLeftText(status: DrawStatus, endAt: string) {
     return "-";
   }
 
-  const now = new Date();
   const end = new Date(endAt);
-  const diff = end.getTime() - now.getTime();
+  const diff = end.getTime() - now;
 
   if (diff <= 0) return "종료";
 
   const totalSeconds = Math.floor(diff / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 
   return `${hours}시간 ${minutes}분`;
 }
@@ -70,10 +84,23 @@ export function DrawDetailPage() {
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [meLoaded, setMeLoaded] = useState(false);
   const [showWinnerModal, setShowWinnerModal] = useState(false);
+  const now = useCurrentTime();
 
   const [hostWinnerInfo, setHostWinnerInfo] = useState<HostWinnerInfoResponse[]>([]);
   const [hostWinnersLoading, setHostWinnersLoading] = useState(false);
   const [hostWinnersError, setHostWinnersError] = useState(false);
+  const [myDelivery, setMyDelivery] = useState<MyDeliveryResponse | null>(null);
+  const [deliveryPhone, setDeliveryPhone] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [myReward, setMyReward] = useState<MyRewardResponse | null>(null);
+  const [rewardImageUrl, setRewardImageUrl] = useState<string | null>(null);
+  const [rewardWinnerId, setRewardWinnerId] = useState<number | null>(null);
+  const [rewardDeliveryType, setRewardDeliveryType] = useState<"CODE" | "MESSAGE" | "IMAGE">("CODE");
+  const [rewardTitle, setRewardTitle] = useState("");
+  const [rewardContent, setRewardContent] = useState("");
+  const [rewardImage, setRewardImage] = useState<File | null>(null);
+  const [rewardConfirmOpen, setRewardConfirmOpen] = useState(false);
+  const [rewardSubmitting, setRewardSubmitting] = useState(false);
 
   const { data: draw, isLoading, isError } = useDrawDetail(drawId);
   const { data: winnerData, isLoading: winnersLoading } = useDrawWinners(
@@ -104,7 +131,7 @@ export function DrawDetailPage() {
   
   useEffect(() => {
   const fetchHostWinnerInfo = async () => {
-    if (!drawId || !showWinnerModal || !isMine || draw?.status !== "CLOSE") return;
+    if (!drawId || !showWinnerModal || !isMine || draw?.shippable || draw?.status !== "CLOSE") return;
 
     try {
       setHostWinnersLoading(true);
@@ -139,6 +166,79 @@ export function DrawDetailPage() {
 
   fetchHostWinnerInfo();
 }, [drawId, draw?.status, isMine, showWinnerModal]);
+
+  useEffect(() => {
+    if (!drawId || !currentUserId || draw?.status !== "CLOSE" || !draw) return;
+    if (!draw.shippable) {
+      apiClient.get<MyRewardResponse>(`/api/draws/${drawId}/my-reward`)
+        .then(({ data, status }) => setMyReward(status === 204 || !data ? null : data))
+        .catch(() => setMyReward(null));
+      return;
+    }
+    apiClient.get<MyDeliveryResponse>(`/api/draws/${drawId}/my-delivery`)
+      .then(({ data, status }) => {
+        if (status === 204 || !data) {
+          setMyDelivery(null);
+          return;
+        }
+        setMyDelivery(data);
+        setDeliveryPhone(data.phone ?? "");
+        setDeliveryAddress(data.address ?? "");
+      })
+      .catch(() => setMyDelivery(null));
+  }, [drawId, draw?.status, draw?.shippable, currentUserId]);
+
+  useEffect(() => {
+    if (!myReward?.imageAvailable) {
+      setRewardImageUrl(null);
+      return;
+    }
+    let imageUrl: string | null = null;
+    apiClient.get(`/api/rewards/${myReward.rewardId}/image`, { responseType: "blob" })
+      .then(({ data }) => {
+        imageUrl = URL.createObjectURL(data);
+        setRewardImageUrl(imageUrl);
+      })
+      .catch(() => {
+        setRewardImageUrl(null);
+        toast.error("보상 이미지를 불러오지 못했습니다.");
+      });
+    return () => {
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+    };
+  }, [myReward?.rewardId, myReward?.imageAvailable]);
+
+  const deliverReward = async () => {
+    if (!drawId || !rewardWinnerId || rewardSubmitting) return;
+    setRewardSubmitting(true);
+    const formData = new FormData();
+    formData.append("deliveryType", rewardDeliveryType);
+    formData.append("title", rewardTitle);
+    if (rewardDeliveryType === "IMAGE") {
+      if (!rewardImage) {
+        toast.error("기프티콘 이미지를 선택해주세요.");
+        setRewardSubmitting(false);
+        return;
+      }
+      formData.append("image", rewardImage);
+    } else {
+      formData.append("content", rewardContent);
+    }
+    try {
+      await apiClient.post(`/api/host/draws/${drawId}/winners/${rewardWinnerId}/reward`, formData);
+      const deliveredAt = new Date().toISOString();
+      setHostWinnerInfo((current) => current.map((winner) => winner.winnerId === rewardWinnerId
+        ? { ...winner, fulfillmentStatus: "REWARD_DELIVERED", rewardTitle, rewardDeliveryType, rewardDeliveredAt: deliveredAt }
+        : winner));
+      setRewardConfirmOpen(false);
+      setRewardWinnerId(null);
+      toast.success("보상을 전달했습니다. 이후에는 변경할 수 없습니다.");
+    } catch {
+      toast.error("보상을 전달하지 못했습니다.");
+    } finally {
+      setRewardSubmitting(false);
+    }
+  };
 
   const sliderSettings = {
     dots: true,
@@ -221,7 +321,7 @@ export function DrawDetailPage() {
   const userTickets = draw.myTicketBalance ?? 0;
   const totalCost = draw.ticketCostEntry * entryCount;
   const remainingTickets = userTickets - totalCost;
-  const timeLeftText = getTimeLeftText(draw.status, draw.endAt);
+  const timeLeftText = getTimeLeftText(draw.status, draw.startAt, draw.endAt, now);
   const imageList = draw.images?.length
     ? draw.images.map((img) => getImageUrl(img))
     : ["/placeholder.png"];
@@ -395,7 +495,7 @@ export function DrawDetailPage() {
             </Slider>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="bg-white rounded-2xl shadow-lg p-4 text-center">
               <Clock className="w-6 h-6 text-purple-600 mx-auto mb-2" />
               <p className="text-sm text-gray-600">남은 시간</p>
@@ -409,6 +509,14 @@ export function DrawDetailPage() {
               <p className="text-sm text-gray-600">응모자 수</p>
               <p className="text-lg font-bold text-gray-900 break-words [overflow-wrap:anywhere]">
                 {draw.participantCount}명
+              </p>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-lg p-4 text-center">
+              <Ticket className="w-6 h-6 text-purple-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-600">총 응모권</p>
+              <p className="text-lg font-bold text-gray-900 break-words [overflow-wrap:anywhere]">
+                {draw.totalEntryCount.toLocaleString()}개
               </p>
             </div>
 
@@ -570,8 +678,82 @@ export function DrawDetailPage() {
           )}
         </div>
       )}
+
+        {draw.status !== "CANCEL" && (
+          <section className="hidden mt-5 rounded-2xl border border-[#00d68a]/30 bg-[#00d68a]/10 p-5">
+            <div className="flex gap-3">
+              <div className="mt-0.5 rounded-xl bg-[#00d68a]/15 p-2 text-[#00d68a]">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                {draw.status === "CLOSE" ? (
+                  <>
+                    <h3 className="font-bold text-gray-900">자동 공정 추첨 완료</h3>
+                    <p className="mt-1 text-sm leading-6 text-gray-600">총 {draw.participantCount.toLocaleString()}명의 참여를 기준으로 시스템이 자동 추첨했어요.</p>
+                    <p className="mt-2 text-xs text-gray-500">응모 마감 시각 · {new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(draw.endAt))}</p>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="font-bold text-gray-900">자동 공정 추첨</h3>
+                    <p className="mt-1 text-sm leading-6 text-gray-600">마감 후 시스템이 무작위로 당첨자를 선정합니다. 운영자는 결과를 직접 변경할 수 없어요.</p>
+                  </>
+                )}
+                <details className="mt-3 text-sm text-[#00d68a]">
+                  <summary className="cursor-pointer font-semibold">추첨 방식 보기</summary>
+                  <p className="mt-2 leading-6 text-gray-600">모든 응모는 동일한 기준으로 반영되며, 마감 이후에 자동 추첨과 결과 기록이 진행됩니다.</p>
+                </details>
+              </div>
+            </div>
+          </section>
+        )}
         </div>
       </div>
+
+      {draw.status !== "CANCEL" && (
+        <section className="mt-8 rounded-2xl border border-[#00d68a]/30 bg-[#00d68a]/10 p-5 sm:p-6">
+          <div className="flex gap-3 sm:gap-4">
+            <div className="shrink-0 rounded-xl bg-[#00d68a]/15 p-2.5 text-[#00d68a]">
+              <ShieldCheck className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              {draw.verification?.status === "VERIFIED" ? (
+                <>
+                  <h2 className="text-lg font-black text-gray-900">검증 가능한 공정 추첨 완료</h2>
+                  <p className="mt-1 text-sm leading-6 text-gray-600">응모 마감 전에 고정된 기준으로 총 {draw.participantCount.toLocaleString()}명, {draw.totalEntryCount.toLocaleString()}개 응모권을 자동 추첨했어요.</p>
+                  <p className="mt-2 text-xs text-gray-500">추첨 완료 · {draw.verification.drawnAt ? new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(draw.verification.drawnAt)) : "기록됨"}</p>
+                </>
+              ) : draw.verification?.status === "PENDING" ? (
+                <>
+                  <h2 className="text-lg font-black text-gray-900">검증 가능한 공정 추첨</h2>
+                  <p className="mt-1 text-sm leading-6 text-gray-600">응모 마감 전에 추첨 기준을 고정했습니다. 마감 후에는 그 기준으로 자동 추첨돼요.</p>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-lg font-black text-gray-900">자동 공정 추첨</h2>
+                  <p className="mt-1 text-sm leading-6 text-gray-600">마감 후 시스템이 무작위로 당첨자를 선정합니다. 운영자는 결과를 직접 변경할 수 없어요.</p>
+                </>
+              )}
+              <details className="mt-3 text-sm text-[#00d68a]">
+                <summary className="cursor-pointer font-semibold">검증 정보 보기</summary>
+                <p className="mt-2 leading-6 text-gray-600">응모 횟수에 비례한 가중 무작위 추첨으로, 한 사용자는 한 번만 당첨될 수 있어요.</p>
+                {draw.verification?.status === "PENDING" && draw.verification.commitment && (
+                  <p className="mt-2 text-xs text-gray-500 break-all">추첨 전 고정값: {draw.verification.commitment}</p>
+                )}
+                {draw.verification?.status === "VERIFIED" && (
+                  <div className="mt-3 space-y-2 text-xs text-gray-500 break-all">
+                    <p>추첨 전 고정값: {draw.verification.commitment}</p>
+                    <p>추첨 재현용 코드: {draw.verification.revealedCode}</p>
+                    <p>참여 기록 검증값: {draw.verification.participantSnapshotHash}</p>
+                  </div>
+                )}
+                {(!draw.verification || draw.verification.status === "LEGACY") && (
+                  <p className="mt-2 text-xs text-gray-500">이 드로우는 검증 기능 도입 전에 생성되어, 추첨 전 고정값을 제공하지 않습니다.</p>
+                )}
+              </details>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="mt-8 bg-white rounded-2xl shadow-lg p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">상품</h2>
@@ -654,19 +836,80 @@ export function DrawDetailPage() {
         </div>
       )}   
 
+      {rewardWinnerId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+          <form className="w-full max-w-md space-y-4 rounded-2xl bg-white p-5 shadow-xl" onKeyDown={(event) => {
+            if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault();
+          }} onSubmit={(event) => {
+            event.preventDefault();
+            if (rewardDeliveryType === "IMAGE") {
+              if (!rewardImage) {
+                toast.error("기프티콘 이미지를 선택해주세요.");
+                return;
+              }
+            }
+            setRewardConfirmOpen(true);
+          }}>
+            <div>
+              <h3 className="text-lg font-bold">당첨 보상 전달</h3>
+              <p className="mt-1 text-sm text-gray-500">전달 후 보상 내용은 변경할 수 없습니다.</p>
+            </div>
+            <select value={rewardDeliveryType} onChange={(event) => setRewardDeliveryType(event.target.value as "CODE" | "MESSAGE" | "IMAGE")} className="w-full rounded border px-3 py-2">
+              <option value="CODE">쿠폰 코드</option>
+              <option value="MESSAGE">안내문</option>
+              <option value="IMAGE">이미지형 기프티콘</option>
+            </select>
+            <input required value={rewardTitle} onChange={(event) => setRewardTitle(event.target.value)} placeholder="보상명" className="w-full rounded border px-3 py-2" />
+            {rewardDeliveryType === "IMAGE" ? (
+              <input required type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={(event) => setRewardImage(event.target.files?.[0] ?? null)} className="w-full text-sm" />
+            ) : (
+              <textarea required value={rewardContent} onChange={(event) => setRewardContent(event.target.value)} placeholder={rewardDeliveryType === "CODE" ? "쿠폰 코드를 입력하세요" : "당첨자에게 전달할 안내를 입력하세요"} className="min-h-28 w-full rounded border px-3 py-2" />
+            )}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setRewardConfirmOpen(false); setRewardWinnerId(null); }} className="flex-1 rounded bg-gray-100 py-2">취소</button>
+              <button type="submit" className="flex-1 rounded bg-purple-600 py-2 font-semibold text-white">전달 내용 확인</button>
+            </div>
+          </form>
+          {rewardConfirmOpen && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4">
+              <div className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-5 shadow-xl">
+                <div>
+                  <h4 className="text-lg font-bold">정말 보상을 전달할까요?</h4>
+                  <p className="mt-1 text-sm text-gray-600">전달 후에는 보상 내용과 이미지를 수정하거나 다시 보낼 수 없습니다.</p>
+                </div>
+                <dl className="space-y-2 rounded-lg bg-gray-50 p-3 text-sm">
+                  <div className="flex justify-between gap-3"><dt className="text-gray-500">보상명</dt><dd className="font-medium text-right">{rewardTitle}</dd></div>
+                  <div className="flex justify-between gap-3"><dt className="text-gray-500">유형</dt><dd className="font-medium">{rewardDeliveryType === "CODE" ? "쿠폰 코드" : rewardDeliveryType === "IMAGE" ? "이미지형 기프티콘" : "안내문"}</dd></div>
+                </dl>
+                <div className="flex gap-2">
+                  <button type="button" disabled={rewardSubmitting} onClick={() => setRewardConfirmOpen(false)} className="flex-1 rounded bg-gray-100 py-2">돌아가기</button>
+                  <button type="button" disabled={rewardSubmitting} onClick={deliverReward} className="flex-1 rounded bg-purple-600 py-2 font-semibold text-white disabled:bg-gray-400">{rewardSubmitting ? "전달 중..." : "확인 후 전달"}</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {showWinnerModal && (
   <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
     <div className="w-full max-w-md bg-white rounded-2xl shadow-xl">
 
       <div className="flex justify-between items-center px-5 py-4 border-b">
         <h3 className="text-lg font-bold"> 
-          {isMine ? "당첨자 상세 정보" : "당첨자 목록"}
+          {isMine && draw?.shippable ? "배송 처리 안내" : isMine ? "당첨자 상세 정보" : "당첨자 목록"}
         </h3>
         <button onClick={() => setShowWinnerModal(false)}>닫기</button>
       </div>
 
       <div className="max-h-[400px] overflow-y-auto px-5 py-4">
-  {isMine ? (
+  {isMine && draw?.shippable ? (
+    <div className="rounded-xl bg-purple-50 p-4 text-sm text-purple-900">
+      <p className="font-semibold">배송 상품의 당첨 처리는 마이페이지에서 진행합니다.</p>
+      <p className="mt-1 text-purple-700">마이페이지의 ‘내가 개설한 드로우’에서 ‘당첨 처리하기’를 눌러 택배사와 송장번호를 입력해주세요.</p>
+      <button type="button" onClick={() => navigate('/my')} className="mt-3 rounded-lg bg-purple-600 px-3 py-2 font-semibold text-white">마이페이지로 이동</button>
+    </div>
+  ) : isMine ? (
     hostWinnersLoading ? (
       <p className="text-gray-500 text-sm">불러오는 중...</p>
     ) : hostWinnersError ? (
@@ -678,18 +921,94 @@ export function DrawDetailPage() {
             key={w.winnerUserId}
             className="border p-4 rounded-lg space-y-1"
           >
+            <div className="flex items-center justify-between gap-3 border-b pb-2 mb-2">
+              <span className="text-sm font-semibold text-purple-700">
+                처리 상태: {w.fulfillmentStatus}
+              </span>
+              {!draw?.shippable ? (
+                w.fulfillmentStatus === "REWARD_PENDING" ? (
+                  <button
+                    type="button"
+                    className="rounded bg-purple-600 px-2 py-1 text-sm font-semibold text-white"
+                    onClick={() => {
+                      setRewardWinnerId(w.winnerId);
+                      setRewardDeliveryType("CODE");
+                      setRewardTitle("");
+                      setRewardContent("");
+                      setRewardImage(null);
+                    }}
+                  >
+                    보상 전달
+                  </button>
+                ) : (
+                  <span className="text-xs text-gray-500">{w.fulfillmentStatus === "COMPLETED" ? "수령 완료" : "보상 전달 완료"}</span>
+                )
+              ) : (w.fulfillmentStatus === "ADDRESS_SUBMITTED" || w.fulfillmentStatus === "PROCESSING") ? <select
+                value={w.fulfillmentStatus}
+                className="rounded border px-2 py-1 text-sm"
+                onChange={async (event) => {
+                  const fulfillmentStatus = event.target.value as HostWinnerInfoResponse["fulfillmentStatus"];
+                  const fulfillmentNote = window.prompt(
+                    "처리 메모를 입력하세요. (예: 기프티콘 문자 발송 완료)",
+                    w.fulfillmentNote ?? ""
+                  );
+
+                  if (fulfillmentNote === null) return;
+                  const trackingNumber = window.prompt(
+                    "송장번호를 입력하세요. 배송 상품이 아니면 비워 두세요.",
+                    w.trackingNumber ?? ""
+                  );
+
+                  if (trackingNumber === null) return;
+
+                  try {
+                    await apiClient.patch(
+                      `/api/host/draws/${drawId}/winners/${w.winnerId}/fulfillment`,
+                      { status: fulfillmentStatus, note: fulfillmentNote, trackingNumber }
+                    );
+                    setHostWinnerInfo((current) =>
+                      current.map((winner) =>
+                        winner.winnerId === w.winnerId
+                          ? { ...winner, fulfillmentStatus, fulfillmentNote, trackingNumber }
+                          : winner
+                      )
+                    );
+                    toast.success("당첨 처리 상태를 변경했습니다.");
+                  } catch (error) {
+                    console.error("당첨 처리 상태 변경 실패:", error);
+                    toast.error("당첨 처리 상태를 변경하지 못했습니다.");
+                  }
+                }}
+              >
+                <option value="PROCESSING">처리 중</option>
+                <option value="COMPLETED">처리 완료</option>
+              </select>
+              : <span className="text-xs text-gray-400">배송 정보 제출 대기</span>}
+            </div>
+            {!draw?.shippable && w.rewardTitle && (
+              <div className="rounded-lg bg-purple-50 p-3 text-sm text-purple-950">
+                <p><span className="font-semibold">전달 보상:</span> {w.rewardTitle}</p>
+                <p><span className="font-semibold">유형:</span> {w.rewardDeliveryType === "CODE" ? "쿠폰 코드" : w.rewardDeliveryType === "IMAGE" ? "이미지형 기프티콘" : "안내문"}</p>
+                <p><span className="font-semibold">전달 시각:</span> {w.rewardDeliveredAt ? new Date(w.rewardDeliveredAt).toLocaleString("ko-KR") : "-"}</p>
+              </div>
+            )}
             <p className="text-sm">
               <span className="font-semibold text-gray-700">이름:</span> {w.name}
             </p>
             <p className="text-sm">
               <span className="font-semibold text-gray-700">닉네임:</span> {w.nickname}
             </p>
-            <p className="text-sm break-all">
-              <span className="font-semibold text-gray-700">전화번호:</span> {w.phone}
-            </p>
-            <p className="text-sm break-words [overflow-wrap:anywhere]">
-              <span className="font-semibold text-gray-700">주소:</span> {w.address}
-            </p>
+            {draw?.shippable && <>
+              <p className="text-sm break-all">
+                <span className="font-semibold text-gray-700">전화번호:</span> {w.phone}
+              </p>
+              <p className="text-sm break-words [overflow-wrap:anywhere]">
+                <span className="font-semibold text-gray-700">주소:</span> {w.address}
+              </p>
+              <p className="text-sm break-all">
+                <span className="font-semibold text-gray-700">송장번호:</span> {w.trackingNumber || "미입력"}
+              </p>
+            </>}
           </li>
         ))}
       </ul>
@@ -699,6 +1018,49 @@ export function DrawDetailPage() {
   ) : winnersLoading ? (
     <p className="text-gray-500 text-sm">불러오는 중...</p>
   ) : winnerData?.winners?.length ? (
+    <>
+      {!draw?.shippable && myReward && (
+        <section className="mb-4 space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-4">
+          <div>
+            <h4 className="font-bold text-purple-800">당첨 보상</h4>
+            <p className="text-xs text-gray-600">개설자가 전달한 보상은 변경할 수 없습니다.</p>
+          </div>
+          <p className="font-semibold text-gray-900">{myReward.title}</p>
+          {myReward.deliveryType === "IMAGE" ? (
+            rewardImageUrl ? <img src={rewardImageUrl} alt={myReward.title} className="max-h-80 w-full rounded-lg object-contain" />
+              : <p className="text-sm text-gray-500">이미지를 불러오는 중...</p>
+          ) : (
+            <p className="whitespace-pre-wrap break-words rounded bg-white p-3 text-sm text-gray-800">{myReward.content}</p>
+          )}
+          <button type="button" disabled={myReward.fulfillmentStatus === "COMPLETED"} onClick={async () => {
+            try {
+              await apiClient.post(`/api/draws/${drawId}/winners/${myReward.winnerId}/reward/confirm`);
+              setMyReward({ ...myReward, fulfillmentStatus: "COMPLETED", confirmedAt: new Date().toISOString() });
+              toast.success("보상 수령을 완료했습니다.");
+            } catch {
+              toast.error("수령 완료 처리에 실패했습니다.");
+            }
+          }} className="w-full rounded bg-purple-600 py-2 text-sm font-bold text-white disabled:bg-gray-400">
+            {myReward.fulfillmentStatus === "COMPLETED" ? "수령 완료" : "수령 완료하기"}
+          </button>
+        </section>
+      )}
+      {myDelivery && (
+        <form className="mb-4 space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-4" onSubmit={async (event) => {
+          event.preventDefault();
+          try {
+            await apiClient.post(`/api/draws/${drawId}/winners/${myDelivery.winnerId}/delivery-address`, { phone: deliveryPhone, address: deliveryAddress });
+            setMyDelivery({ ...myDelivery, phone: deliveryPhone, address: deliveryAddress, fulfillmentStatus: "ADDRESS_SUBMITTED" });
+            toast.success("배송 정보를 제출했습니다.");
+          } catch { toast.error("배송 정보를 제출하지 못했습니다."); }
+        }}>
+          <h4 className="font-bold text-purple-800">당첨 배송 정보</h4>
+          <p className="text-xs text-gray-600">입력 기한: {myDelivery.addressDeadlineAt ? new Date(myDelivery.addressDeadlineAt).toLocaleString("ko-KR") : "-"}</p>
+          <input required value={deliveryPhone} onChange={(e) => setDeliveryPhone(e.target.value)} placeholder="연락처" className="w-full rounded border px-3 py-2 text-sm" />
+          <textarea required value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="배송 주소" className="w-full rounded border px-3 py-2 text-sm" />
+          <button type="submit" disabled={myDelivery.fulfillmentStatus !== "ADDRESS_REQUIRED"} className="w-full rounded bg-purple-600 py-2 text-sm font-bold text-white disabled:bg-gray-400">{myDelivery.fulfillmentStatus === "EXPIRED" ? "입력 기한 만료" : myDelivery.fulfillmentStatus === "ADDRESS_SUBMITTED" ? "배송 정보 제출 완료" : "배송 정보 제출"}</button>
+        </form>
+      )}
     <ul className="space-y-3">
       {winnerData.winners.map((w, i) => (
         <li
@@ -710,6 +1072,7 @@ export function DrawDetailPage() {
         </li>
       ))}
     </ul>
+    </>
   ) : (
     <p className="text-gray-500 text-sm">당첨자가 없습니다.</p>
   )}

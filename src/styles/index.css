@@ -1,3 +1,34 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+
+:root {
+  --luckydrop-bg: #0e0f1c;
+  --luckydrop-surface: #191b2b;
+  --luckydrop-surface-raised: #23263a;
+  --luckydrop-border: #30344b;
+  --luckydrop-green: #00d68a;
+}
+
+html { background: var(--luckydrop-bg); }
+body { min-width: 320px; background: var(--luckydrop-bg); color: #f8fafc; }
+::selection { background: #00d68a; color: #07140f; }
+
+/* Shared dark-reward visual language for existing screens. */
+.bg-white { background-color: var(--luckydrop-surface) !important; }
+.bg-gray-50 { background-color: var(--luckydrop-bg) !important; }
+.bg-gray-100 { background-color: var(--luckydrop-surface-raised) !important; }
+.bg-gray-200 { background-color: #2b2f45 !important; }
+.text-gray-900 { color: #f8fafc !important; }
+.text-gray-800 { color: #eef2ff !important; }
+.text-gray-700 { color: #d6d9e7 !important; }
+.text-gray-600 { color: #aeb4c7 !important; }
+.text-gray-500, .text-gray-400 { color: #8991aa !important; }
+.border-gray-100, .border-gray-200, .border-gray-300 { border-color: var(--luckydrop-border) !important; }
+.from-purple-500, .from-purple-600 { --tw-gradient-from: #00d68a var(--tw-gradient-from-position) !important; --tw-gradient-to: rgb(0 214 138 / 0) var(--tw-gradient-to-position) !important; }
+.to-pink-500, .to-pink-600 { --tw-gradient-to: #00a96e var(--tw-gradient-to-position) !important; }
+.text-purple-600, .text-purple-700 { color: var(--luckydrop-green) !important; }
+.bg-purple-50, .bg-purple-100 { background-color: rgb(0 214 138 / 0.12) !important; }
+.border-purple-100 { border-color: rgb(0 214 138 / 0.25) !important; }
+
+input, select, textarea { color: #f8fafc; background-color: #202337; }
